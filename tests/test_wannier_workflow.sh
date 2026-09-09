@@ -63,7 +63,9 @@ grep -Fx -- '0.06' "$TEST_DIR/prepare-arguments"
 (
   cd "$TEST_DIR"
   ./workflow.sh prepare-wannier \
-    --elements Mn Sb --orbitals d p --num-bands 22 --kpr 0.05
+    --elements Mn Sb --orbitals d p --num-bands 22 --kpr 0.05 \
+    --window-method adaptive --search-energy-range -6 7 \
+    --outer-coverage 0.95 --frozen-character-min 0.8
 )
 
 test -s "$TEST_DIR/04_wann/job.sh"
@@ -77,6 +79,15 @@ grep -Fx -- 'mock-vaspkit' "$TEST_DIR/prepare-arguments"
 grep -Fx -- '--kpr' "$TEST_DIR/prepare-arguments"
 grep -Fx -- '0.05' "$TEST_DIR/prepare-arguments"
 ! grep -Fx -- '0.06' "$TEST_DIR/prepare-arguments"
+grep -Fx -- '--window-method' "$TEST_DIR/prepare-arguments"
+grep -Fx -- 'adaptive' "$TEST_DIR/prepare-arguments"
+grep -Fx -- '--search-energy-range' "$TEST_DIR/prepare-arguments"
+grep -Fx -- '-6' "$TEST_DIR/prepare-arguments"
+grep -Fx -- '7' "$TEST_DIR/prepare-arguments"
+grep -Fx -- '--outer-coverage' "$TEST_DIR/prepare-arguments"
+grep -Fx -- '0.95' "$TEST_DIR/prepare-arguments"
+grep -Fx -- '--frozen-character-min' "$TEST_DIR/prepare-arguments"
+grep -Fx -- '0.8' "$TEST_DIR/prepare-arguments"
 
 status="$("$TEST_DIR/workflow.sh" status)"
 grep -Eq '^04_wann[[:space:]]+prepared$' <<< "$status"

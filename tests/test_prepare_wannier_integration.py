@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import csv
+import json
 import shlex
+import subprocess
 import sys
 import tempfile
 import textwrap
@@ -131,6 +134,54 @@ NBANDS = 36
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    def test_adaptive_default_writes_diagnostics_and_outer_only_incar(self) -> None:
+        with (self.scf / "OUTCAR").open("a") as handle:
+            handle.write("E-fermi : 0.0\n")
+        stage, _, _, _ = preparer.prepare_wannier(
+            self.root, ("Mn", "Sb"), ("d", "p"), 2, 0.04, self.vaspkit)
+        report = json.loads((stage / "wannier_window_diagnostics.json").read_text())
+        self.assertEqual(report["method"], "adaptive")
+        self.assertEqual(report["fermi_energy"], 0.0)
+        self.assertEqual(report["windows_relative"]["outer"], [-1, 1.5])
+        self.assertIsNone(report["windows_relative"]["frozen"])
+        self.assertTrue(report["outer_only_reason"])
+        incar = (stage / "INCAR").read_text()
+        self.assertIn("dis_win_min = -1", incar)
+        self.assertNotIn("dis_froz_", incar)
+        self.assertIn("num_iter = 0", incar)
+        with (stage / "wannier_band_ranking.csv").open() as handle:
+            rows = list(csv.DictReader(handle))
+        self.assertEqual([float(row["bz_weighted_projection"]) for row in rows], [1.0, 1.0])
+
+    def test_adaptive_missing_fermi_does_not_create_stage(self) -> None:
+        with self.assertRaisesRegex(preparer.WannierPreparationError, "no finite E-fermi"):
+            preparer.prepare_wannier(self.root, ("Mn", "Sb"), ("d", "p"),
+                                     2, 0.04, self.vaspkit)
+        self.assertFalse((self.root / "04_wann").exists())
+
+    def test_adaptive_cli_generates_frozen_window_and_passes_options(self) -> None:
+        with (self.scf / "OUTCAR").open("a") as handle:
+            handle.write("E-fermi : 0.35\n")
+        result = subprocess.run(
+            [sys.executable, "-B", str(SOURCE_DIR / "prepare_wannier.py"),
+             "--root", str(self.root), "--elements", "Mn", "Sb", "--orbitals", "d", "p",
+             "--num-bands", "2", "--vaspkit", self.vaspkit,
+             "--window-method", "adaptive", "--search-energy-range", "-6", "7",
+             "--outer-coverage", "0.95",
+             "--frozen-character-min", "0.5", "--frozen-margin", "0.15"],
+            capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        stage = self.root / "04_wann"
+        report = json.loads((stage / "wannier_window_diagnostics.json").read_text())
+        self.assertEqual(report["parameters"]["search_energy_range"], [-6, 7])
+        self.assertEqual(report["parameters"]["outer_coverage"], 0.95)
+        self.assertEqual(report["parameters"]["frozen_character_min"], 0.5)
+        self.assertEqual(report["windows_relative"]["frozen"], [-1.35, 1.1])
+        text = (stage / "INCAR").read_text()
+        self.assertIn("dis_froz_min = -1", text)
+        self.assertIn("dis_froz_max = 1.45", text)
+        self.assertIsNone(report["outer_only_reason"])
+
     def test_prepares_complete_stage_and_force_replaces_it(self) -> None:
         stage, frontier, nbands, num_wann = preparer.prepare_wannier(
             self.root,
@@ -139,6 +190,7 @@ NBANDS = 36
             2,
             0.05,
             self.vaspkit,
+            window_method="legacy",
         )
 
         self.assertEqual(stage, self.root / "04_wann")
@@ -191,6 +243,7 @@ NBANDS = 36
                 2,
                 0.06,
                 self.vaspkit,
+                window_method="legacy",
             )
 
         preparer.prepare_wannier(
@@ -200,6 +253,7 @@ NBANDS = 36
             2,
             0.06,
             self.vaspkit,
+            window_method="legacy",
             force=True,
             frozen_margin=0.1,
         )
@@ -251,6 +305,7 @@ header
             3,
             0.05,
             self.vaspkit,
+            window_method="legacy",
         )
 
         self.assertEqual(3, num_wann)
@@ -310,6 +365,7 @@ header
             1,
             0.05,
             self.vaspkit,
+            window_method="legacy",
         )
 
         self.assertAlmostEqual(-1.0, frontier.min_value)
@@ -338,6 +394,7 @@ header
             None,
             0.05,
             self.vaspkit,
+            window_method="legacy",
         )
 
         self.assertEqual(num_wann, 1)
@@ -358,6 +415,7 @@ header
                 2,
                 0.04,
                 self.vaspkit,
+                window_method="legacy",
             )
 
     def test_force_refuses_unowned_stage(self) -> None:
@@ -376,6 +434,7 @@ header
                 2,
                 0.04,
                 self.vaspkit,
+                window_method="legacy",
                 force=True,
             )
         self.assertEqual(manual_input.read_text(encoding="utf-8"), "keep me\n")

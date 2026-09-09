@@ -158,11 +158,11 @@ Other useful plotting controls are `--marker-scale`, `--vaspkit`, and repeated
 ## 5. Prepare and Run Stage 04: Wannier
 
 Choose positionally paired element/orbital projections and the number of
-Wannier functions. UP and DW target bands are ranked independently. When a
-channel's selected indices are noncontiguous, its largest contiguous run
-drives the energy windows; tied runs prefer the one containing the
-highest-ranked band. All selected bands still count toward `NUM_WANN` and
-remain in `wannier_band_ranking.csv`.
+Wannier functions. Adaptive selection is the default: search for the requested
+orbital subspace from `E_F - 15` to `E_F + 15` eV using the last finite SCF
+OUTCAR Fermi value. It scores exact pairs (`Mn:d`, `Sb:p`) at each SCF k-point,
+without requiring a contiguous band-index block. The ranking CSV remains a
+separate report; it does not define the adaptive windows.
 
 ```bash
 ./workflow.sh prepare-wannier \
@@ -179,8 +179,9 @@ the SCF stage uses `LORBIT=10`; component names such as `dxy` are rejected. Use
 Ranking is read directly from `01_scf/PROCAR`, not from the symmetry-line band
 path. For every band and spin channel, the requested ion/shell projections are
 summed over the complete irreducible SCF mesh using the `weight =` value written
-by VASP, then normalized by the total k-point weight. `02_dos/EIGENVAL` still
-provides the energy extrema and Wannier windows. A missing or empty SCF PROCAR
+by VASP, then normalized by the total k-point weight. Adaptive selection uses
+each SCF state's own energy; `02_dos/EIGENVAL` supplies independent state-count
+checks and the CSV energy extrema. A missing or empty SCF PROCAR
 is a hard error; rerun or restart the SCF projection output before preparation.
 
 The Gamma-centered Wannier mesh uses `KPR_WANN` from `workflow.conf`
@@ -195,6 +196,10 @@ Example with every optional preparation control:
   --num-bands 22 \
   --kpr 0.04 \
   --frozen-margin 0.1 \
+  --window-method adaptive \
+  --search-energy-range -15 15 \
+  --outer-coverage 0.98 \
+  --frozen-character-min 0.70 \
   --vaspkit vaspkit \
   --force
 ```
@@ -207,12 +212,28 @@ Run or submit only the prepared Wannier stage:
 ```
 
 Inspect `04_wann/OUTCAR`, the Wannier90 output, interpolated bands, and
-`wannier_band_ranking.csv` before choosing cRPA target states.
+`wannier_band_ranking.csv` before choosing cRPA target states. Before running,
+inspect `04_wann/wannier_window_diagnostics.json` for selected absolute and
+relative windows, coverage, limiting counts, and warnings.
 
-For collinear spin-polarized calculations, `prepare-wannier` reads the UP and
-DW blocks of SCF `PROCAR` and ranks them independently. It selects the largest
-contiguous run in each channel, then builds one common frozen window from the
-intersection of the chosen-run and neighboring-band guard ranges.
+The narrowest acceptable outer window contains `E_F` and retains the requested
+coverage for every nonzero pair/k-point/spin distribution within the bounded
+search region. There is no separate target interval. Bands outside that region
+cannot move the windows. A frozen interval is selected inside the outer and
+must contain `E_F`, pass the PAW character threshold, fit `NUM_WANN` on both
+SCF/DOS meshes, and contain states in each spin channel. When no frozen
+candidate passes, preparation explicitly writes an outer-only calculation.
+PAW character is a heuristic, not a radial-shell label or a proof of
+interpolation accuracy; the generated Wannier mesh remains unverified.
+
+`--search-energy-range` replaces the former target-range and padding options.
+The default search bounds are ±15 eV; final windows are free to be narrower
+or asymmetric. The inner window is no longer restricted to ±2 eV.
+
+Use `--window-method legacy` to retain the previous cross-product ranking,
+largest contiguous run and guarded frozen-window formulas. Both modes now
+reject outer windows with fewer than `NUM_WANN` states at any supplied
+SCF/DOS k-point. Other adaptive thresholds apply only to adaptive mode.
 
 ## 6. Prepare and Run Stage 05: cRPA
 

@@ -222,10 +222,17 @@ optional band stage when available), use for example:
 Elements and orbitals are paired by position. NUM_WANN defaults to the sum of
 the matching POSCAR atom counts times shell multiplicities (s=1, p=3, d=5,
 f=7); --num-bands N overrides it. The command accepts --kpr VALUE
-(default KPR_WANN, 0.04), --frozen-margin EV (default 0.1), and --force. It
-ranks aggregate s/p/d/f weights directly from the full-zone 01_scf/PROCAR,
-using VASP k-point integration weights, then generates 04_wann and records the
-selected-band energy frontier. A missing SCF PROCAR is an error.
+(default KPR_WANN, 0.04), --frozen-margin EV (default 0.1), and --force.
+--window-method adaptive (default) uses paired SCF PROCAR weights and the last
+finite SCF OUTCAR E-fermi. --search-energy-range MIN MAX defaults to -15 15 eV
+relative to E_F. Both windows contain E_F; the inner is selected inside the
+outer. --outer-coverage FRACTION (0.98) and --frozen-character-min FRACTION (0.70)
+control bounded adaptive selection. There is no separate target energy range.
+No acceptable frozen interval produces an explicitly reported outer-only input.
+--window-method legacy retains the old ranking and window formulas. Both modes
+check outer state counts on SCF/DOS meshes and write
+04_wann/wannier_window_diagnostics.json. The generated Wannier mesh and
+interpolation accuracy remain unverified. A missing SCF PROCAR is an error.
 
 After 04_wann finishes successfully, prepare cRPA. By default all Wannier
 states from 1 through NUM_WANN are excluded from screening:

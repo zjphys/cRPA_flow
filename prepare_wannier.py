@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 import re
@@ -17,6 +18,7 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 import rank_wannier_bands as ranker
+import wannier_windows as selector
 
 
 MARKER = ".generated-by-poscar-workflow"
@@ -47,10 +49,14 @@ class WannierPreparationError(RuntimeError):
 
 @dataclass(frozen=True)
 class WannierWindows:
-    dis_froz_min: float
-    dis_froz_max: float
+    dis_froz_min: float | None
+    dis_froz_max: float | None
     dis_win_min: float
     dis_win_max: float
+
+    def __post_init__(self) -> None:
+        if (self.dis_froz_min is None) != (self.dis_froz_max is None):
+            raise WannierPreparationError("frozen bounds must both be present or both be absent")
 
 
 @dataclass(frozen=True)
@@ -83,6 +89,23 @@ def read_effective_nbands(path: Path) -> int:
         )
     if values[-1] <= 0:
         raise WannierPreparationError(f"SCF OUTCAR contains invalid NBANDS: {values[-1]}")
+    return values[-1]
+
+
+def read_fermi_energy(path: Path) -> float:
+    """Use the last finite SCF Fermi value as a common energy reference."""
+    require_file(path, "SCF OUTCAR")
+    values = []
+    for token in re.findall(r"E-fermi\s*:\s*(\S+)", path.read_text(
+            encoding="utf-8", errors="replace"), re.IGNORECASE):
+        try:
+            value = float(token.replace("D", "E").replace("d", "e"))
+        except ValueError:
+            continue
+        if math.isfinite(value):
+            values.append(value)
+    if not values:
+        raise WannierPreparationError(f"no finite E-fermi value in SCF OUTCAR: {path}")
     return values[-1]
 
 
@@ -360,6 +383,14 @@ def calculate_windows(
                     + context
                 )
 
+    for spin in eigenval.spin_channels:
+        for k in range(eigenval.nkpoints):
+            count = sum(target_min - 5.0 <= values[k] <= target_max + 5.0
+                        for values in eigenval.energies[spin].values())
+            if count < num_wann:
+                raise WannierPreparationError(
+                    f"outer window contains {count} states at DOS spin {spin}, "
+                    f"k-point {k + 1}, fewer than NUM_WANN={num_wann}")
     return WannierWindows(
         dis_froz_min=frozen_min,
         dis_froz_max=frozen_max,
@@ -383,6 +414,7 @@ def paired_projections(
             "for positional pairing"
         )
     projections: list[str] = []
+    seen: set[tuple[str, str]] = set()
     for element, orbital in zip(elements, orbitals):
         if (
             not element.strip()
@@ -403,6 +435,10 @@ def paired_projections(
                 f"unsupported projection orbital {orbital!r}; use an aggregate "
                 "LORBIT=10 shell: s, p, d, or f"
             )
+        pair = (element.casefold(), ranker.normalized_name(orbital))
+        if pair in seen:
+            raise WannierPreparationError(f"duplicate element-shell projection pair: {element}:{orbital}")
+        seen.add(pair)
         projections.append(f"{element}:{orbital}")
     return tuple(projections)
 
@@ -477,9 +513,7 @@ def _strip_controlled_incar_settings(text: str) -> list[str]:
 
 
 def _format_energy(value: float) -> str:
-    if value == 0:
-        return "0"
-    return f"{value:.10g}"
+    return f"{value:.15g}" if value else "0"
 
 
 def rewrite_incar(
@@ -520,8 +554,9 @@ def rewrite_incar(
         "dis_num_iter = 1000",
         f"dis_win_min = {_format_energy(windows.dis_win_min)}",
         f"dis_win_max = {_format_energy(windows.dis_win_max)}",
-        f"dis_froz_min = {_format_energy(windows.dis_froz_min)}",
-        f"dis_froz_max = {_format_energy(windows.dis_froz_max)}",
+        *([f"dis_froz_min = {_format_energy(windows.dis_froz_min)}",
+           f"dis_froz_max = {_format_energy(windows.dis_froz_max)}"]
+          if windows.dis_froz_min is not None else []),
         "begin projections",
         *projections,
         "end projections",
@@ -623,6 +658,11 @@ def prepare_wannier(
     vaspkit: str,
     force: bool = False,
     frozen_margin: float = 0.1,
+    *,
+    window_method: str = "adaptive",
+    search_energy_range: Sequence[float] = (-15.0, 15.0),
+    outer_coverage: float = 0.98,
+    frozen_character_min: float = 0.70,
 ) -> tuple[Path, ranker.EnergyFrontier, int, int]:
     """Create a complete workflow-owned 04_wann directory."""
 
@@ -634,6 +674,15 @@ def prepare_wannier(
     if not math.isfinite(frozen_margin) or frozen_margin < 0:
         raise WannierPreparationError("--frozen-margin must be finite and nonnegative")
     projections = paired_projections(elements, orbitals)
+    if window_method not in ("adaptive", "legacy"):
+        raise WannierPreparationError("--window-method must be adaptive or legacy")
+    options = selector.WindowOptions(search=tuple(search_energy_range), coverage=outer_coverage,
+                                     character_min=frozen_character_min, frozen_margin=frozen_margin)
+    if window_method == "adaptive":
+        try:
+            options.validate()
+        except selector.WindowSelectionError as exc:
+            raise WannierPreparationError(str(exc)) from exc
 
     scf_directory = root / "01_scf"
     dos_directory = root / "02_dos"
@@ -651,9 +700,12 @@ def prepare_wannier(
     if num_bands is None:
         num_bands = infer_num_wann(scf_directory / "POSCAR", elements, orbitals)
     procar = ranker.parse_procar(scf_directory / "PROCAR")
-    ranked_by_spin = ranker.rank_procar(
-        procar, scf_directory / "POSCAR", elements, orbitals
-    )
+    projected = None
+    if window_method == "adaptive":
+        projected = ranker.project_pairs(procar, scf_directory / "POSCAR", elements, orbitals)
+        ranked_by_spin = ranker.rank_paired_procar(procar, projected)
+    else:
+        ranked_by_spin = ranker.rank_procar(procar, scf_directory / "POSCAR", elements, orbitals)
     selected_by_spin = {
         spin: ranker.select_top_bands(ranking, num_bands)
         for spin, ranking in ranked_by_spin.items()
@@ -662,15 +714,36 @@ def prepare_wannier(
     ranker.validate_procar_eigenval(procar, eigenval)
     results = ranker.add_spin_energy_statistics(selected_by_spin, eigenval)
     frontier = ranker.calculate_total_frontier(results)
-    windows = calculate_windows(
-        eigenval,
-        {
-            spin: [item.band_index for item in selected]
-            for spin, selected in selected_by_spin.items()
-        },
-        num_bands,
-        frozen_margin,
-    )
+    try:
+        if window_method == "adaptive":
+            fermi = read_fermi_energy(scf_directory / "OUTCAR")
+            outer, frozen, diagnostics = selector.select_adaptive(
+                procar, eigenval, projected, projections, num_bands, fermi, options)
+            windows = WannierWindows(*(frozen or (None, None)), *outer)
+        else:
+            windows = calculate_windows(
+                eigenval, {spin: [item.band_index for item in selected]
+                           for spin, selected in selected_by_spin.items()},
+                num_bands, frozen_margin)
+            diagnostics = {
+                "method": "legacy", "fermi_energy": None,
+                "parameters": {"frozen_margin": frozen_margin},
+                "projection_pairs": list(projections), "ranking_mode": "cross_product",
+                "num_wann": num_bands, "windows_relative": None,
+                "windows_absolute": {"outer": [windows.dis_win_min, windows.dis_win_max],
+                                     "frozen": [windows.dis_froz_min, windows.dis_froz_max]},
+                "warnings": [], "outer_only_reason": None,
+                "frozen_counts": selector.count_summary(
+                    selector.energy_meshes(procar, eigenval),
+                    windows.dis_froz_min, windows.dis_froz_max),
+                "validation_scope": "Supplied SCF/DOS meshes only; generated Wannier mesh is unverified.",
+            }
+        diagnostics["outer_counts"] = selector.validate_outer_counts(
+            procar, eigenval, windows.dis_win_min, windows.dis_win_max, num_bands)
+    except selector.WindowSelectionError as exc:
+        raise WannierPreparationError(str(exc)) from exc
+    diagnostics["sources"] = {"scf_procar": str(procar.path), "dos_eigenval": str(eigenval.path),
+                              "scf_outcar": str(scf_directory / "OUTCAR")}
 
     scf_nbands = read_effective_nbands(scf_directory / "OUTCAR")
     wannier_nbands = 2 * scf_nbands
@@ -723,6 +796,8 @@ def prepare_wannier(
         shutil.copy2(generated_kpoints, staged / "KPOINTS")
         (staged / "INCAR").write_text(incar, encoding="utf-8")
         ranker.write_csv(staged / "wannier_band_ranking.csv", results)
+        (staged / "wannier_window_diagnostics.json").write_text(
+            json.dumps(diagnostics, indent=2, allow_nan=False) + "\n", encoding="utf-8")
         (staged / MARKER).touch()
 
         if stage.exists():
@@ -732,11 +807,24 @@ def prepare_wannier(
         shutil.rmtree(temporary_root, ignore_errors=True)
         raise
     shutil.rmtree(temporary_root, ignore_errors=True)
-    print(
-        "Frozen window (eV): "
-        f"[{_format_energy(windows.dis_froz_min)}, "
-        f"{_format_energy(windows.dis_froz_max)}]"
-    )
+    print(f"Window method: {window_method}")
+    if diagnostics["fermi_energy"] is not None:
+        print(f"SCF E_F (eV): {diagnostics['fermi_energy']:g}; "
+              f"search relative to E_F: {list(options.search)} eV")
+        for pair in diagnostics["coverage_by_pair"]:
+            minimum = pair["minimum"]
+            print(f"Local coverage {pair['pair']}: " +
+                  (f"{minimum['coverage']:.6f} (spin {minimum['spin']}, "
+                   f"k-point {minimum['kpoint']})" if minimum else "unavailable"))
+    print(f"Outer window (absolute eV): [{windows.dis_win_min:g}, {windows.dis_win_max:g}]")
+    if windows.dis_froz_min is None:
+        print(f"Frozen window: none (outer-only). {diagnostics['outer_only_reason']}")
+    else:
+        print(f"Frozen window (absolute eV): [{windows.dis_froz_min:g}, {windows.dis_froz_max:g}]")
+    for warning in diagnostics["warnings"]:
+        print(f"Warning: {warning}")
+    print(diagnostics["validation_scope"])
+    print(f"Window diagnostics: {stage / 'wannier_window_diagnostics.json'}")
     return stage, frontier, wannier_nbands, num_bands
 
 
@@ -782,6 +870,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=os.environ.get("VASPKIT_BIN", "vaspkit"),
         help="VASPKIT command (default: VASPKIT_BIN or vaspkit)",
     )
+    parser.add_argument("--window-method", choices=("adaptive", "legacy"), default="adaptive",
+                        help="Fermi-centred adaptive selection (default), or legacy formulas")
+    parser.add_argument("--search-energy-range", type=float, nargs=2, default=(-15.0, 15.0),
+                        metavar=("MIN", "MAX"), help="search bounds relative to SCF E_F (default: -15 15 eV)")
+    parser.add_argument("--outer-coverage", type=float, default=0.98,
+                        help="minimum per-pair local coverage (default: 0.98)")
+    parser.add_argument("--frozen-character-min", type=float, default=0.70,
+                        help="minimum qualitative PAW target fraction for freezing (default: 0.70)")
     parser.add_argument("--force", action="store_true")
     return parser.parse_args(argv)
 
@@ -798,6 +894,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.vaspkit,
             args.force,
             args.frozen_margin,
+            window_method=args.window_method,
+            search_energy_range=args.search_energy_range,
+            outer_coverage=args.outer_coverage,
+            frozen_character_min=args.frozen_character_min,
         )
     except (WannierPreparationError, ranker.PBandError, OSError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

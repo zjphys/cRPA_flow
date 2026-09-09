@@ -209,7 +209,7 @@ as projected DOS by element in its
 
 ### 3.5 Projection ranking: define a frontier, not an explicit band list
 
-For each spin channel, the ranking score for band $n$ is the normalized
+For the standalone ranking command and `--window-method legacy`, the ranking score for band $n$ is the normalized
 Brillouin-zone projection
 
 $$
@@ -233,17 +233,18 @@ The combined frontier is the smallest and largest DOS-mesh energy among each
 channel's selected bands. `prepare_wannier.py` saves only those per-channel
 selections in `04_wann/wannier_band_ranking.csv`.
 
-If a channel's selected indices are noncontiguous, they are partitioned into
+In legacy preparation, if a channel's selected indices are noncontiguous, they are partitioned into
 maximal contiguous runs. The run containing the most selected indices drives
 that channel's Wannier windows. Equal-length runs are resolved in favor of the
 run containing the highest-ranked band. This window choice does not remove
 other selected bands, reduce `NUM_WANN`, or change the combined frontier.
 
-> **Important distinction:** `--elements Mn Sb --orbitals d p` creates the
-> positionally paired Wannier projections `Mn:d` and `Sb:p`, but the ranking
-> score sums both `d` and `p` over all Mn and Sb ions. The selected
-> band indices are used to calculate the energy frontier; they are not written
-> to Wannier90 as `exclude_bands`.
+Adaptive preparation (the default) instead sums the exact positional pairs:
+`--elements Mn Sb --orbitals d p` scores `Mn:d` and `Sb:p` only. Its CSV keeps
+the same columns and top-band reporting, but window selection uses individual
+SCF states and their own energies, independently of that band-index ranking.
+The standalone ranking tool retains the cross-product formula above.
+Selected band indices are never written as `exclude_bands`.
 
 ### 3.6 `04_wann`: construct the Wannier transformation
 
@@ -375,6 +376,49 @@ root `POTCAR` is reused; `prepare --force` does not regenerate it.
 
 ### 4.2 Disentanglement windows
 
+**Adaptive selection (default).** Read the last finite SCF OUTCAR `E-fermi` and
+use one common energy reference. `--search-energy-range MIN MAX` defines the
+only search interval relative to this value (default `-15 15`; `MIN < 0 < MAX`).
+There is no separate target interval or search padding. Window keywords are
+written in the original absolute energy convention.
+
+Candidate outer bounds advance outward from `E_F` in 0.25 eV steps, including
+the exact search endpoints. Zero-width candidates are excluded. The narrowest
+interval containing `E_F` must retain `--outer-coverage` (default 0.98) of
+each requested pair's weight within the search region, independently at every
+SCF k-point and spin. Zero-weight distributions are reported as unavailable.
+Ties prefer balance about `E_F`, then the lower lower-bound. Every SCF and DOS
+k-point must also have at least `NUM_WANN` states inside. If none passes,
+preparation stops; it never silently enlarges the search region.
+
+Frozen bounds are searched inward from the selected outer edges on the same
+0.25 eV grid, including zero and exact outer endpoints. After applying
+`--frozen-margin` (default 0.1 eV), the interval must contain `E_F`, contain no
+SCF state whose requested-pair weight divided by total PAW weight is below
+`--frozen-character-min` (default 0.70), and have at most `NUM_WANN` states at
+every SCF/DOS k-point. Zero-total-weight states are ineligible. There must be
+at least one frozen SCF state in each spin channel. The winner maximizes
+k-weighted requested orbital weight (normalized per spin); ties prefer greater width,
+then the lower lower-bound. Degenerate states are counted together.
+If no candidate passes, both `dis_froz_*` keywords are omitted: the result is
+an explicitly reported outer-only calculation.
+
+Both windows can be asymmetric. The outer window can be narrower than the
+former ±2 eV target, and the inner window can extend beyond those former
+bounds. A positive margin removes outer-edge states from frozen candidates;
+if no states remain in a spin channel, or if the outer window ends at `E_F`
+so an inward margin would exclude it, the result is outer-only.
+
+The per-pair coverage denominator excludes bands outside the bounded region,
+so adding distant high-energy bands does not move the adaptive windows.
+PAW fractions are qualitative character estimates, not normalized Wannier
+projectabilities or radial-shell identifiers. The method does not prove band
+interpolation accuracy. SCF weights are never attached to DOS k-points; the
+two meshes receive independent count checks. The generated Wannier mesh
+remains unverified. No Wannier runs or automatic model-dimension changes occur.
+
+**Legacy selection (`--window-method legacy`).**
+
 For each spin channel, partition the rank-ordered target-band indices into
 maximal contiguous runs and choose the run with the most indices. If runs have
 the same length, choose the one containing the highest-ranked band. Let
@@ -399,6 +443,16 @@ ranked bands outside the chosen run remain in the ranking CSV and count toward
 outer window provides candidate states while the frozen manifold is retained
 in the optimized subspace; the parameters are documented in the
 [Wannier90 parameter reference](https://www.wannier.org/ford/module/w90_parameters.html).
+
+Both methods now reject outer windows containing fewer than `NUM_WANN` states
+at any supplied SCF or DOS k-point; this can reject previously accepted legacy
+inputs. `04_wann/wannier_window_diagnostics.json` records the method, sources,
+parameters, projection pairs, windows, limiting count locations and validation
+scope. Adaptive reports additionally include the Fermi reference, relative
+windows, minimum coverage per pair, unavailable distributions, rejected frozen
+candidate counts, low-character states in the search region, band-edge warnings and any
+outer-only explanation. Reaching a search/band boundary is reported and is
+not evidence of `NBANDS` convergence.
 
 ### 4.3 Band counts
 
@@ -567,7 +621,7 @@ placing material data in the master script source:
 
 ```bash
 mkdir -p my_material
-cp /path/to/version1/{workflow.sh,workflow.conf,batch_workflow.sh,postprocess.py,rank_wannier_bands.py,prepare_wannier.py,prepare_crpa.py} my_material/
+cp /path/to/version1/{workflow.sh,workflow.conf,batch_workflow.sh,postprocess.py,rank_wannier_bands.py,prepare_wannier.py,wannier_windows.py,prepare_crpa.py} my_material/
 cp /path/to/POSCAR my_material/POSCAR
 cd my_material
 chmod +x workflow.sh batch_workflow.sh
@@ -1174,7 +1228,7 @@ total_frontier_width
 
 ### 13.1 Normal and direct use
 
-Normal wrapper, selecting all `1..NUM_WANN` states by default:
+Normal wrapper, using adaptive windows around the SCF Fermi level:
 
 ```bash
 ./workflow.sh prepare-wannier \
@@ -1205,9 +1259,19 @@ python3 prepare_wannier.py \
 | `--orbitals O...` | Projection orbitals and ranking orbital requests. | Required |
 | `--num-bands N` | Number of top-ranked bands and `NUM_WANN`; overrides inference. | Inferred from POSCAR and projections |
 | `--kpr VALUE` | VASPKIT reciprocal resolution for Gamma mesh. | `0.04` |
-| `--frozen-margin EV` | Inward margin applied to both isolated frozen-window bounds. | `0.1` |
+| `--frozen-margin EV` | Inward margin applied to both candidate frozen-window bounds. | `0.1` |
+| `--window-method adaptive\|legacy` | Fermi-centred proposals or previous ranking/window formulas. | `adaptive` |
+| `--search-energy-range MIN MAX` | Search interval relative to SCF E_F; finite MIN < 0 < MAX. | `-15 15` eV |
+| `--outer-coverage FRACTION` | Per-pair coverage within bounded search region; strictly between 0 and 1. | `0.98` |
+| `--frozen-character-min FRACTION` | Qualitative target/total PAW fraction in [0, 1]. | `0.70` |
 | `--vaspkit COMMAND` | VASPKIT command string. | `VASPKIT_BIN` or `vaspkit` |
 | `--force` | Replace an existing workflow-owned `04_wann`. | Off |
+
+`--search-energy-range` replaces `--target-energy-range` and
+`--outer-search-padding`; the former options are no longer accepted. To retain
+the old search bounds `[MIN - PAD, MAX + PAD]`, pass those two bounds explicitly.
+Diagnostics now use `search_energy_range`, `search_counts`, and
+`low_character_states_in_search`; there is no `target` window or padding field.
 
 Elements and orbitals must contain the same number of non-empty, single-token
 values. The projection list is positionally paired. When `--num-bands` is
@@ -1216,6 +1280,10 @@ times the paired orbital multiplicity: `s=1`, `p=3`, `d=5`, and `f=7`.
 Other orbital names are rejected even when `--num-bands` is explicit, because
 ranking is intentionally restricted to `LORBIT=10` aggregate shells. Spin
 polarization does not double the inferred value.
+
+Adaptive mode permits distinct pairs sharing an element or shell. Duplicate
+pairs are rejected. Legacy ranking keeps its earlier duplicate-element/shell
+restrictions. Adaptive-specific thresholds are used only in adaptive mode.
 
 ### 13.3 Required upstream files
 
@@ -1234,7 +1302,11 @@ from `01_scf/PROCAR`. It does not fall back to `02_dos/PROCAR`, symmetry-line
 PBAND data, or equal-k averaging. If SCF PROCAR is missing, rerun or restart the
 SCF projection output with `LORBIT=10` before preparation.
 
-For a spin-polarized calculation, target bands are ranked independently from
+Adaptive preparation requires a finite `E-fermi` entry in SCF OUTCAR. A missing
+value is an error; zero is never silently substituted. See section 4.2 for
+the adaptive algorithm and diagnostics. Legacy mode does not require E_F.
+
+In legacy mode, for a spin-polarized calculation, target bands are ranked independently from
 the UP and DW PROCAR blocks and may have different band indices. Each channel
 must select exactly the resolved `NUM_WANN` count. A noncontiguous selection is
 reduced to its largest contiguous run only for window calculation; equal-length

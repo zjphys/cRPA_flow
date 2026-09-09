@@ -79,6 +79,69 @@ class RankedBand:
 
 
 @dataclass(frozen=True)
+class PairedState:
+    """One SCF state, with matched element-shell weights (not projectabilities)."""
+
+    band_index: int
+    energy: float
+    pair_weights: tuple[float, ...]
+    total_weight: float
+
+
+def project_pairs(
+    data: ProcarData, poscar: Path,
+    elements: Sequence[str], orbitals: Sequence[str],
+) -> dict[str, tuple[tuple[PairedState, ...], ...]]:
+    """Keep k-resolved weights for exact positional element-shell pairs."""
+    if not elements or len(elements) != len(orbitals):
+        raise PBandError("elements and orbitals must have equal nonzero lengths for pairing")
+    pairs = [(element.casefold(), normalized_name(shell))
+             for element, shell in zip(elements, orbitals)]
+    if len(set(pairs)) != len(pairs):
+        raise PBandError("duplicate element-shell projection pair")
+    resolved = [(resolve_elements(data, poscar, [element]),
+                 resolve_shells(data, [shell])[0]) for element, shell in pairs]
+    total_column = data.columns.index("tot")
+    projected = {}
+    for spin in data.spin_channels:
+        blocks = []
+        for kpoint in data.kpoints[spin]:
+            states = []
+            for band in kpoint.bands:
+                weights = tuple(math.fsum(band.ion_projections[ion][column]
+                                          for ion in ions)
+                                for ions, column in resolved)
+                total = math.fsum(row[total_column] for row in band.ion_projections)
+                if total < 0 or any(value < 0 for value in weights):
+                    raise PBandError("paired orbital weights must be nonnegative")
+                states.append(PairedState(band.band_index, band.energy, weights, total))
+            blocks.append(tuple(states))
+        projected[spin] = tuple(blocks)
+    return projected
+
+
+def rank_paired_procar(
+    data: ProcarData,
+    projected: dict[str, tuple[tuple[PairedState, ...], ...]],
+) -> dict[str, list[RankedBand]]:
+    """Rank paired contributions for reporting; windows use individual states."""
+    rankings = {}
+    for spin in data.spin_channels:
+        kpoints = data.kpoints[spin]
+        weight_sum = math.fsum(kpoint.weight for kpoint in kpoints)
+        if not math.isfinite(weight_sum) or weight_sum <= 0:
+            raise PBandError(f"spin {spin} k-point weights have nonpositive total")
+        scores = [(band + 1, math.fsum(
+            kp.weight * math.fsum(projected[spin][k][band].pair_weights)
+            for k, kp in enumerate(kpoints)) / weight_sum)
+            for band in range(data.nbands)]
+        scores.sort(key=lambda item: (-item[1], item[0]))
+        rankings[spin] = [RankedBand(rank, band, score, data.nkpoints, weight_sum)
+                          for rank, (band, score) in enumerate(scores, 1)]
+    return rankings
+
+
+@dataclass(frozen=True)
 class EigenvalData:
     path: Path
     nkpoints: int
