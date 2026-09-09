@@ -984,7 +984,7 @@ def plot_projected_band_dos(
         )
         wannier_color = "#b2182b"
         for spin in spin_channels:
-            linestyle = "--" if spin == "down" else "-"
+            linestyle = "--"
             for band in aligned_bands[spin]:
                 ax_band.plot(
                     band[:, 0],
