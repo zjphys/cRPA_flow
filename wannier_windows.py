@@ -19,7 +19,7 @@ class WindowSelectionError(ValueError):
 
 @dataclass(frozen=True)
 class WindowOptions:
-    search: tuple[float, float] = (-15.0, 15.0)
+    search: tuple[float, float] = (-15.0, 20.0)
     coverage: float = 0.98
     character_min: float = 0.70
     frozen_margin: float = 0.1

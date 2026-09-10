@@ -159,7 +159,7 @@ Other useful plotting controls are `--marker-scale`, `--vaspkit`, and repeated
 
 Choose positionally paired element/orbital projections and the number of
 Wannier functions. Adaptive selection is the default: search for the requested
-orbital subspace from `E_F - 15` to `E_F + 15` eV using the last finite SCF
+orbital subspace from `E_F - 15` to `E_F + 20` eV using the last finite SCF
 OUTCAR Fermi value. It scores exact pairs (`Mn:d`, `Sb:p`) at each SCF k-point,
 without requiring a contiguous band-index block. The ranking CSV remains a
 separate report; it does not define the adaptive windows.
@@ -197,7 +197,7 @@ Example with every optional preparation control:
   --kpr 0.04 \
   --frozen-margin 0.1 \
   --window-method adaptive \
-  --search-energy-range -15 15 \
+  --search-energy-range -15 20 \
   --outer-coverage 0.98 \
   --frozen-character-min 0.70 \
   --vaspkit vaspkit \
@@ -227,7 +227,7 @@ PAW character is a heuristic, not a radial-shell label or a proof of
 interpolation accuracy; the generated Wannier mesh remains unverified.
 
 `--search-energy-range` replaces the former target-range and padding options.
-The default search bounds are ±15 eV; final windows are free to be narrower
+The default search bounds are −15 to +20 eV relative to `E_F`; final windows are free to be narrower
 or asymmetric. The inner window is no longer restricted to ±2 eV.
 
 Use `--window-method legacy` to retain the previous cross-product ranking,

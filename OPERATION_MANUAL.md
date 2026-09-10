@@ -378,7 +378,7 @@ root `POTCAR` is reused; `prepare --force` does not regenerate it.
 
 **Adaptive selection (default).** Read the last finite SCF OUTCAR `E-fermi` and
 use one common energy reference. `--search-energy-range MIN MAX` defines the
-only search interval relative to this value (default `-15 15`; `MIN < 0 < MAX`).
+only search interval relative to this value (default `-15 20`; `MIN < 0 < MAX`).
 There is no separate target interval or search padding. Window keywords are
 written in the original absolute energy convention.
 
@@ -1261,7 +1261,7 @@ python3 prepare_wannier.py \
 | `--kpr VALUE` | VASPKIT reciprocal resolution for Gamma mesh. | `0.04` |
 | `--frozen-margin EV` | Inward margin applied to both candidate frozen-window bounds. | `0.1` |
 | `--window-method adaptive\|legacy` | Fermi-centred proposals or previous ranking/window formulas. | `adaptive` |
-| `--search-energy-range MIN MAX` | Search interval relative to SCF E_F; finite MIN < 0 < MAX. | `-15 15` eV |
+| `--search-energy-range MIN MAX` | Search interval relative to SCF E_F; finite MIN < 0 < MAX. | `-15 20` eV |
 | `--outer-coverage FRACTION` | Per-pair coverage within bounded search region; strictly between 0 and 1. | `0.98` |
 | `--frozen-character-min FRACTION` | Qualitative target/total PAW fraction in [0, 1]. | `0.70` |
 | `--vaspkit COMMAND` | VASPKIT command string. | `VASPKIT_BIN` or `vaspkit` |

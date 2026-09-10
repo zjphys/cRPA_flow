@@ -78,7 +78,7 @@ class AdaptiveWindowTests(unittest.TestCase):
     def test_distant_d_bands_do_not_change_selection(self):
         base = [(-1, 1, 0, 0), (1, 0, 1, 0)]
         old = self.select({"none": [base]})
-        new = self.select({"none": [base + [(20, 1000, 0, 0), (40, 1000, 0, 0)]]})
+        new = self.select({"none": [base + [(25, 1000, 0, 0), (40, 1000, 0, 0)]]})
         self.assertEqual(old[:2], new[:2])
         self.assertEqual(old[2]["coverage_by_pair"], new[2]["coverage_by_pair"])
 
@@ -145,13 +145,13 @@ class AdaptiveWindowTests(unittest.TestCase):
 
     def test_no_search_weight_fails_and_zero_pair_is_reported(self):
         with self.assertRaisesRegex(selector.WindowSelectionError, "no weight"):
-            self.select({"none": [[(16, 1, 0, 0), (17, 0, 1, 0)]]})
+            self.select({"none": [[(21, 1, 0, 0), (22, 0, 1, 0)]]})
         _, _, report = self.select({"none": [[(-1, 1, 0, 0), (1, 1, 0, 0)]]})
         self.assertIsNone(report["coverage_by_pair"][1]["minimum"])
         self.assertTrue(report["unavailable_coverage"])
 
     def test_search_limits_are_enforced_and_reported(self):
-        channels = {"none": [[(-1, 1, 0, 0), (15, 0, 1, 0)]]}
+        channels = {"none": [[(-1, 1, 0, 0), (20, 0, 1, 0)]]}
         self.assertIn("search boundary", " ".join(self.select(channels)[2]["warnings"]))
         with self.assertRaisesRegex(selector.WindowSelectionError, "limiting state count"):
             self.select(channels, search=(-2, 2))
@@ -176,7 +176,7 @@ class AdaptiveWindowTests(unittest.TestCase):
     def test_cli_defaults_and_overrides(self):
         args = preparer.parse_args(["--elements", "Mn", "--orbitals", "d"])
         self.assertEqual(args.window_method, "adaptive")
-        self.assertEqual(tuple(args.search_energy_range), (-15, 15))
+        self.assertEqual(tuple(args.search_energy_range), (-15, 20))
         args = preparer.parse_args(["--elements", "Mn", "--orbitals", "d",
                                    "--window-method", "legacy", "--search-energy-range", "-1", "3",
                                    "--outer-coverage", "0.95",

@@ -91,7 +91,7 @@ are available:
 
 Wannier preparation now defaults to Fermi-centred adaptive selection. It uses
 exact element-shell pairs (`Mn:d`, `Sb:p`) and searches from `E_F - 15` to
-`E_F + 15` eV. For a different search range, for example:
+`E_F + 20` eV. For a different search range, for example:
 
 ```bash
 ./workflow.sh prepare-wannier --elements Mn Sb --orbitals d p \

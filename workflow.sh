@@ -224,7 +224,7 @@ the matching POSCAR atom counts times shell multiplicities (s=1, p=3, d=5,
 f=7); --num-bands N overrides it. The command accepts --kpr VALUE
 (default KPR_WANN, 0.04), --frozen-margin EV (default 0.1), and --force.
 --window-method adaptive (default) uses paired SCF PROCAR weights and the last
-finite SCF OUTCAR E-fermi. --search-energy-range MIN MAX defaults to -15 15 eV
+finite SCF OUTCAR E-fermi. --search-energy-range MIN MAX defaults to -15 20 eV
 relative to E_F. Both windows contain E_F; the inner is selected inside the
 outer. --outer-coverage FRACTION (0.98) and --frozen-character-min FRACTION (0.70)
 control bounded adaptive selection. There is no separate target energy range.
