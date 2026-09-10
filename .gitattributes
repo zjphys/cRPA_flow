@@ -1,0 +1,2 @@
+# Keep Linux line endings in text files, including on Windows checkouts.
+* text=auto eol=lf
