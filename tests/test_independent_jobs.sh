@@ -7,7 +7,7 @@ trap 'case "$TEST_DIR" in */version1-independent-jobs-test.*) rm -rf -- "$TEST_D
 
 CASE_DIR="$TEST_DIR/case"
 mkdir -p "$CASE_DIR" "$TEST_DIR/mockbin"
-cp "$SOURCE_DIR/workflow.sh" "$CASE_DIR/workflow.sh"
+cp "$SOURCE_DIR/src/vasp_workflow/resources/workflow.sh" "$CASE_DIR/workflow.sh"
 chmod +x "$CASE_DIR/workflow.sh"
 cat > "$CASE_DIR/POSCAR" <<'EOF'
 Independent job test

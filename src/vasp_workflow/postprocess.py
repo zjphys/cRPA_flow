@@ -37,8 +37,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path(__file__).resolve().parent,
-        help="workflow directory (default: directory containing this script)",
+        default=Path.cwd(),
+        help="workflow directory (default: current directory)",
     )
     parser.add_argument(
         "-o",

@@ -45,8 +45,11 @@ esac
 EOF
 chmod +x "$TEST_DIR/mockbin/vaspkit"
 
+cp "$SOURCE_DIR/src/vasp_workflow/resources/defaults.conf" "$TEST_DIR/workflow.conf"
+printf '\nSBATCH_NODES=4\n' >> "$TEST_DIR/workflow.conf"
+PYTHONPATH="$SOURCE_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
 PATH="$TEST_DIR/mockbin:$PATH" \
-  bash "$SOURCE_DIR/batch_workflow.sh" --mode prepare --no-relax \
+  python3 -m vasp_workflow --config "$TEST_DIR/workflow.conf" batch --mode prepare --no-relax \
   "$TEST_DIR/structures" "$TEST_DIR/calculations"
 
 test -s "$TEST_DIR/calculations/flat/01_scf/INCAR"
@@ -54,9 +57,9 @@ test -s "$TEST_DIR/calculations/flat/01_scf/KPOINTS"
 test -s "$TEST_DIR/calculations/flat/02_dos/KPOINTS"
 test -s "$TEST_DIR/calculations/flat/01_scf/job.sh"
 test -s "$TEST_DIR/calculations/flat/02_dos/job.sh"
-test -s "$TEST_DIR/calculations/flat/prepare_wannier.py"
-test -s "$TEST_DIR/calculations/flat/wannier_windows.py"
-test -s "$TEST_DIR/calculations/flat/prepare_crpa.py"
+test ! -e "$TEST_DIR/calculations/flat/prepare_wannier.py"
+test ! -e "$TEST_DIR/calculations/flat/wannier_windows.py"
+test ! -e "$TEST_DIR/calculations/flat/prepare_crpa.py"
 test -s "$TEST_DIR/calculations/nested_case/03_band/KPOINTS"
 grep -Fx 'KPAR = 4' "$TEST_DIR/calculations/flat/01_scf/INCAR"
 grep -Fx 'Mock Gamma KPR 0.02' "$TEST_DIR/calculations/flat/01_scf/KPOINTS"
@@ -67,4 +70,6 @@ test -f "$TEST_DIR/calculations/flat/.batch-workflow-case"
 ! grep -F '../00_relax/CONTCAR' "$TEST_DIR/calculations/flat/01_scf/job.sh"
 grep -F '../01_scf/CHGCAR' "$TEST_DIR/calculations/flat/02_dos/job.sh"
 
+(cd "$TEST_DIR/calculations/flat" && bash workflow.sh status)
+test -s "$TEST_DIR/calculations/flat/.workflow-version"
 printf 'batch functional test passed\n'

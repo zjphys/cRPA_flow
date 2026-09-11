@@ -9,10 +9,10 @@ import unittest
 from pathlib import Path
 
 SOURCE_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(SOURCE_DIR))
+sys.path.insert(0, str(SOURCE_DIR / "src"))
 
-import prepare_wannier as preparer
-import rank_wannier_bands as ranker
+from vasp_workflow import prepare_wannier as preparer
+from vasp_workflow import rank_wannier_bands as ranker
 
 
 KPOINT_PATH = """header

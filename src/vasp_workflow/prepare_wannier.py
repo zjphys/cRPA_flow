@@ -17,8 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
 
-import rank_wannier_bands as ranker
-import wannier_windows as selector
+from . import rank_wannier_bands as ranker
+from . import wannier_windows as selector
 
 
 MARKER = ".generated-by-poscar-workflow"
@@ -841,8 +841,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path(__file__).resolve().parent,
-        help="workflow root (default: directory containing this script)",
+        default=Path.cwd(),
+        help="workflow root (default: current directory)",
     )
     parser.add_argument("--elements", nargs="+", required=True)
     parser.add_argument(

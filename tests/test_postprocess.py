@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -10,9 +11,9 @@ import numpy as np
 
 
 VERSION_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(VERSION_DIR))
+sys.path.insert(0, str(VERSION_DIR / "src"))
 
-import postprocess
+from vasp_workflow import postprocess
 
 
 class PostprocessSpinTests(unittest.TestCase):
@@ -63,7 +64,7 @@ class PostprocessSpinTests(unittest.TestCase):
         result = subprocess.run(
             [
                 sys.executable,
-                str(VERSION_DIR / "postprocess.py"),
+                "-m", "vasp_workflow.postprocess",
                 "--root",
                 str(self.root),
                 "--reuse-data",
@@ -72,6 +73,7 @@ class PostprocessSpinTests(unittest.TestCase):
                 "--dpi",
                 "50",
             ],
+            env={**os.environ, "PYTHONPATH": str(VERSION_DIR / "src")},
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -92,7 +94,7 @@ class PostprocessSpinTests(unittest.TestCase):
         result = subprocess.run(
             [
                 sys.executable,
-                str(VERSION_DIR / "postprocess.py"),
+                "-m", "vasp_workflow.postprocess",
                 "--root",
                 str(self.root),
                 "--reuse-data",
@@ -105,6 +107,7 @@ class PostprocessSpinTests(unittest.TestCase):
                 "--orbitals",
                 "s",
             ],
+            env={**os.environ, "PYTHONPATH": str(VERSION_DIR / "src")},
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -203,7 +206,7 @@ class PostprocessWannierTests(unittest.TestCase):
         return subprocess.run(
             [
                 sys.executable,
-                str(VERSION_DIR / "postprocess.py"),
+                "-m", "vasp_workflow.postprocess",
                 "--root",
                 str(self.root),
                 "--reuse-data",
@@ -213,6 +216,7 @@ class PostprocessWannierTests(unittest.TestCase):
                 "--dpi",
                 "50",
             ],
+            env={**os.environ, "PYTHONPATH": str(VERSION_DIR / "src")},
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

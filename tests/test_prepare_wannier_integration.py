@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import shlex
+import os
 import subprocess
 import sys
 import tempfile
@@ -13,9 +14,9 @@ import unittest
 from pathlib import Path
 
 SOURCE_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(SOURCE_DIR))
+sys.path.insert(0, str(SOURCE_DIR / "src"))
 
-import prepare_wannier as preparer
+from vasp_workflow import prepare_wannier as preparer
 from tests.test_rank_wannier_bands import procar_text
 
 
@@ -165,13 +166,14 @@ NBANDS = 36
         with (self.scf / "OUTCAR").open("a") as handle:
             handle.write("E-fermi : 0.35\n")
         result = subprocess.run(
-            [sys.executable, "-B", str(SOURCE_DIR / "prepare_wannier.py"),
+            [sys.executable, "-B", "-m", "vasp_workflow.prepare_wannier",
              "--root", str(self.root), "--elements", "Mn", "Sb", "--orbitals", "d", "p",
              "--num-bands", "2", "--vaspkit", self.vaspkit,
              "--window-method", "adaptive", "--search-energy-range", "-6", "7",
              "--outer-coverage", "0.95",
              "--frozen-character-min", "0.5", "--frozen-margin", "0.15"],
-            capture_output=True, text=True, check=False)
+            env={**os.environ, "PYTHONPATH": str(SOURCE_DIR / "src")},
+                    capture_output=True, text=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         stage = self.root / "04_wann"
         report = json.loads((stage / "wannier_window_diagnostics.json").read_text())
@@ -194,10 +196,11 @@ NBANDS = 36
                 with (self.scf / "OUTCAR").open("a") as handle:
                     handle.write(f"E-fermi : {fermi}\n")
                 result = subprocess.run(
-                    [sys.executable, "-B", str(SOURCE_DIR / "prepare_wannier.py"),
+                    [sys.executable, "-B", "-m", "vasp_workflow.prepare_wannier",
                      "--root", str(self.root), "--elements", "Mn", "Sb", "--orbitals", "d", "p",
                      "--num-bands", "2", "--vaspkit", self.vaspkit, "--force",
                      "--search-energy-range", *map(str, bounds), "--frozen-character-min", "0.5"],
+                    env={**os.environ, "PYTHONPATH": str(SOURCE_DIR / "src")},
                     capture_output=True, text=True, check=False)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 stage = self.root / "04_wann"

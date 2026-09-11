@@ -4,8 +4,15 @@ set -euo pipefail
 # POSCAR-first VASP workflow: relax -> SCF -> DOS/bands, then optional Wannier/cRPA.
 # Optional site-specific values can be placed in workflow.conf.
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CODE_DIR="${WORKFLOW_CODE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+ROOT_DIR="${WORKFLOW_ROOT:-$CODE_DIR}"
+[[ -d "$ROOT_DIR" ]] || { printf 'ERROR: calculation directory does not exist: %s\n' "$ROOT_DIR" >&2; exit 1; }
+ROOT_DIR="$(cd "$ROOT_DIR" && pwd)"
 CONFIG_FILE="${WORKFLOW_CONFIG:-$ROOT_DIR/workflow.conf}"
+if [[ -n "${WORKFLOW_CONFIG:-}" && ! -f "$CONFIG_FILE" ]]; then
+  printf 'ERROR: configuration does not exist: %s\n' "$CONFIG_FILE" >&2
+  exit 1
+fi
 [[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
 
 VASPKIT_BIN="${VASPKIT_BIN:-vaspkit}"
@@ -170,6 +177,9 @@ warn() { printf 'WARNING: %s\n' "$*" >&2; }
 usage() {
   cat <<'EOF'
 Usage:
+  vasp-workflow [--root DIR] [--config FILE] COMMAND [ARGS]
+  vasp-workflow init DIR --poscar FILE --profile local|slurm
+  vasp-workflow doctor prepare|plot|submit|run
   ./workflow.sh prepare [--force] [--no-relax]
                                       Generate all inputs from POSCAR
   ./workflow.sh run                Run stages sequentially in this shell
@@ -192,8 +202,8 @@ Usage:
 Only POSCAR is required as user-supplied scientific input. VASPKIT must be
 configured with a licensed pseudopotential library to generate POTCAR. It also
 generates Gamma-centered relaxation/SCF/DOS meshes and the symmetry-aware band
-path. Copy workflow.conf.example to
-workflow.conf only when site or calculation defaults need changing.
+path. Use vasp-workflow init to create a new case configuration, or edit
+workflow.conf when site or calculation defaults need changing.
 That file can also replace each complete INCAR template, the Slurm header,
 shared runtime setup, and individual stage commands.
 
@@ -247,6 +257,48 @@ The command accepts --nbandsgw N, --encutgw EV, and --force. By default it
 uses the completed Wannier NBANDS for NBANDSGW and two-thirds of ENCUT for
 ENCUTGW. It copies the required Wannier restart inputs into 05_crpa.
 EOF
+}
+
+doctor() {
+  local mode="${1:-prepare}" failed=0 tool
+  local -a required=(awk sed grep head tail find sort mktemp cp)
+  case "$mode" in
+    prepare) required+=("$VASPKIT_BIN") ;;
+    plot) required+=("$VASPKIT_BIN") ;;
+    submit) required+=("$SUBMIT_COMMAND") ;;
+    run) ;;
+    *) die "Use doctor prepare|plot|submit|run." ;;
+  esac
+  printf 'Calculation: %s\nConfiguration: %s\nBash: %s\n' "$ROOT_DIR" "$CONFIG_FILE" "$BASH_VERSION"
+  for tool in "${required[@]}" "$PYTHON_BIN"; do
+    if command -v "$tool" >/dev/null 2>&1; then
+      printf 'OK: %s\n' "$tool"
+    else
+      printf 'MISSING: %s\n' "$tool"
+      failed=1
+    fi
+  done
+  if command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+    "$PYTHON_BIN" -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ required"; print("Python:", sys.version.split()[0])' || failed=1
+    if [[ "$mode" == plot ]]; then
+      "$PYTHON_BIN" -c 'import numpy, matplotlib; print("NumPy:", numpy.__version__, "Matplotlib:", matplotlib.__version__)' || failed=1
+    fi
+  fi
+  if [[ "$mode" == prepare && ! -s "$ROOT_DIR/POSCAR" ]]; then
+    printf 'MISSING: nonempty POSCAR in calculation directory\n'
+    failed=1
+  fi
+  if [[ "$mode" == submit ]]; then
+    for tool in SBATCH_NODES SBATCH_NTASKS_PER_NODE SBATCH_CPUS_PER_TASK; do
+      if [[ ! "${!tool}" =~ ^[1-9][0-9]*$ ]]; then
+        printf 'INVALID: %s=%s (positive integer required)\n' "$tool" "${!tool}"
+        failed=1
+      fi
+    done
+  fi
+  printf 'Configured execution command: %s\n' "${STAGE_COMMANDS[default]}"
+  printf 'Execution setup and simulation binaries are not run by this check. Verify them on the target compute nodes.\n'
+  (( failed == 0 ))
 }
 
 is_enabled() {
@@ -528,10 +580,26 @@ prepare() {
   info "Prepared stages: ${STAGES[*]}"
 }
 
+run_python_tool() {
+  local module="$1"
+  shift
+  if [[ "${WORKFLOW_PACKAGE:-0}" == 1 ]]; then
+    "$PYTHON_BIN" -m "vasp_workflow.$module" "$@"
+  else
+    "$PYTHON_BIN" "$CODE_DIR/$module.py" "$@"
+  fi
+}
+
 prepare_wannier_stage() {
   local argument
+  for argument in "$@"; do
+    if [[ "$argument" == --help || "$argument" == -h ]]; then
+      run_python_tool prepare_wannier --help
+      return
+    fi
+  done
   local -a kpr_arguments=(--kpr "$KPR_WANN")
-  [[ -f "$ROOT_DIR/prepare_wannier.py" ]] ||
+  [[ "${WORKFLOW_PACKAGE:-0}" == 1 || -f "$CODE_DIR/prepare_wannier.py" ]] ||
     die "prepare_wannier.py is missing from $ROOT_DIR"
   command -v "$PYTHON_BIN" >/dev/null 2>&1 ||
     die "Python command '$PYTHON_BIN' is unavailable."
@@ -541,7 +609,7 @@ prepare_wannier_stage() {
       break
     fi
   done
-  "$PYTHON_BIN" "$ROOT_DIR/prepare_wannier.py" \
+  run_python_tool prepare_wannier \
     --root "$ROOT_DIR" --vaspkit "$VASPKIT_BIN" \
     "${kpr_arguments[@]}" "$@"
   write_job 04_wann
@@ -550,12 +618,19 @@ prepare_wannier_stage() {
 }
 
 prepare_crpa_stage() {
-  [[ -f "$ROOT_DIR/prepare_crpa.py" ]] ||
+  local argument
+  for argument in "$@"; do
+    if [[ "$argument" == --help || "$argument" == -h ]]; then
+      run_python_tool prepare_crpa --help
+      return
+    fi
+  done
+  [[ "${WORKFLOW_PACKAGE:-0}" == 1 || -f "$CODE_DIR/prepare_crpa.py" ]] ||
     die "prepare_crpa.py is missing from $ROOT_DIR"
   command -v "$PYTHON_BIN" >/dev/null 2>&1 ||
     die "Python command '$PYTHON_BIN' is unavailable."
   INCAR_CRPA_TEMPLATE="$INCAR_CRPA_TEMPLATE" \
-    "$PYTHON_BIN" "$ROOT_DIR/prepare_crpa.py" \
+    run_python_tool prepare_crpa \
       --root "$ROOT_DIR" --kpar "$CRPA_KPAR" "$@"
   write_job 05_crpa
   register_stage 05_crpa
@@ -729,12 +804,13 @@ status() {
 }
 
 case "${1:-}" in
+  doctor) shift; doctor "$@" ;;
   prepare) shift; prepare "$@" ;;
   run) run_all ;;
   submit) shift; submit_all "$@" ;;
   execute) execute_stage "${2:-}" ;;
   status) status ;;
-  postprocess) shift; exec "$PYTHON_BIN" "$ROOT_DIR/postprocess.py" --root "$ROOT_DIR" "$@" ;;
+  postprocess) shift; run_python_tool postprocess --root "$ROOT_DIR" "$@" ;;
   prepare-wannier) shift; prepare_wannier_stage "$@" ;;
   run-wannier) run_wannier ;;
   submit-wannier) shift; submit_wannier "$@" ;;

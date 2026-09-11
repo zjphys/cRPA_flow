@@ -455,8 +455,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path(__file__).resolve().parent,
-        help="workflow root (default: directory containing this script)",
+        default=Path.cwd(),
+        help="workflow root (default: current directory)",
     )
     parser.add_argument(
         "--target-states",

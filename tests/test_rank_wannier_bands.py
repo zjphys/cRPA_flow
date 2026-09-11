@@ -10,8 +10,8 @@ import unittest
 from pathlib import Path
 
 VERSION_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(VERSION_DIR))
-import rank_wannier_bands as ranker
+sys.path.insert(0, str(VERSION_DIR / "src"))
+from vasp_workflow import rank_wannier_bands as ranker
 
 POSCAR = """Test material
 1.0

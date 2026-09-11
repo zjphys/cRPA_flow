@@ -5,7 +5,7 @@ SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/version1-wannier-workflow-test.XXXXXX")"
 trap 'case "$TEST_DIR" in */version1-wannier-workflow-test.*) rm -rf -- "$TEST_DIR" ;; esac' EXIT
 
-cp "$SOURCE_DIR/workflow.sh" "$TEST_DIR/workflow.sh"
+cp "$SOURCE_DIR/src/vasp_workflow/resources/workflow.sh" "$TEST_DIR/workflow.sh"
 chmod +x "$TEST_DIR/workflow.sh"
 mkdir -p "$TEST_DIR/01_scf"
 for name in POSCAR POTCAR CHGCAR; do

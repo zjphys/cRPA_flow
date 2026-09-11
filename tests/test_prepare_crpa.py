@@ -9,9 +9,9 @@ import unittest
 from pathlib import Path
 
 SOURCE_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(SOURCE_DIR))
+sys.path.insert(0, str(SOURCE_DIR / "src"))
 
-import prepare_crpa as preparer
+from vasp_workflow import prepare_crpa as preparer
 
 
 POSCAR = """cRPA integration material

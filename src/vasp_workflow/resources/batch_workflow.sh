@@ -3,7 +3,8 @@ set -uo pipefail
 
 # Prepare and optionally run/submit one isolated workflow for every POSCAR.
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="${WORKFLOW_CODE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+BATCH_CONFIG="${WORKFLOW_BATCH_CONFIG:-$SCRIPT_DIR/workflow.conf}"
 MODE="submit"
 FORCE="no"
 NO_RELAX="no"
@@ -21,8 +22,7 @@ usage() {
 Usage:
   ./batch_workflow.sh [OPTIONS] STRUCTURE_DIR [CALCULATION_DIR]
 
-Create one calculation directory per input POSCAR, copy the version1 workflow
-into it, run "workflow.sh prepare", and optionally run or submit the workflow.
+Create one calculation directory per input POSCAR, create a launcher using the installed workflow, run "workflow.sh prepare", and optionally run or submit the workflow.
 
 Input layouts:
   STRUCTURE_DIR/POSCAR_Fe.vasp       Flat files named POSCAR*, *.vasp, or *.poscar
@@ -96,7 +96,8 @@ done
   die "--mode must be prepare, submit, or run."
 [[ -n "$STRUCTURE_DIR" ]] || { usage >&2; exit 2; }
 [[ -d "$STRUCTURE_DIR" ]] || die "Structure directory does not exist: $STRUCTURE_DIR"
-[[ -s "$SCRIPT_DIR/workflow.sh" ]] || die "workflow.sh is missing from $SCRIPT_DIR"
+[[ -s "$BATCH_CONFIG" ]] || die "Configuration is missing: $BATCH_CONFIG"
+BATCH_CONFIG="$(cd "$(dirname "$BATCH_CONFIG")" && pwd)/$(basename "$BATCH_CONFIG")"
 
 STRUCTURE_DIR="$(cd "$STRUCTURE_DIR" && pwd)"
 if [[ -z "$CALCULATION_DIR" ]]; then
@@ -162,15 +163,17 @@ done
 mkdir -p "$CALCULATION_DIR" || die "Cannot create $CALCULATION_DIR"
 
 copy_workflow_files() {
-  local destination="$1" source base
-  while IFS= read -r -d '' source; do
-    base="$(basename "$source")"
-    case "$base" in
-      batch_workflow.sh|POSCAR|POTCAR|KPATH.in|.workflow-stages) continue ;;
-    esac
-    cp "$source" "$destination/$base" || return 1
-  done < <(find "$SCRIPT_DIR" -maxdepth 1 -type f -print0)
+  local destination="$1"
+  cp -- "$BATCH_CONFIG" "$destination/workflow.conf" || return 1
+  {
+    printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail'
+    printf '%s\n' 'case_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"'
+    printf 'export PYTHONPATH=%q\n' "${PYTHONPATH:-}"
+    printf '%s\n' 'unset WORKFLOW_CONFIG WORKFLOW_ROOT'
+    printf 'exec %q -m vasp_workflow --root "$case_dir" "$@"\n' "$(command -v "${PYTHON_BIN:-python3}")"
+  } > "$destination/workflow.sh" || return 1
   chmod +x "$destination/workflow.sh" || return 1
+  "${PYTHON_BIN:-python3}" -c 'from vasp_workflow import __version__; print(__version__)' > "$destination/.workflow-version" || return 1
 }
 
 prepared=0

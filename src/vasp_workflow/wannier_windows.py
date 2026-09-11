@@ -10,7 +10,7 @@ import math
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 
-import rank_wannier_bands as ranker
+from . import rank_wannier_bands as ranker
 
 
 class WindowSelectionError(ValueError):
