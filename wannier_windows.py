@@ -1,4 +1,4 @@
-"""Bounded, Fermi-centred window proposals from existing VASP outputs.
+"""Bounded, orbital-driven window proposals from existing VASP outputs.
 
 PAW weights are qualitative character estimates, not Wannier projectabilities.
 All selection is performed relative to one SCF Fermi reference.
@@ -19,15 +19,15 @@ class WindowSelectionError(ValueError):
 
 @dataclass(frozen=True)
 class WindowOptions:
-    search: tuple[float, float] = (-15.0, 20.0)
-    coverage: float = 0.98
+    search: tuple[float, float] = (-20.0, 20.0)
+    coverage: float = 0.8
     character_min: float = 0.70
     frozen_margin: float = 0.1
 
     def validate(self) -> None:
         if (len(self.search) != 2 or not all(map(math.isfinite, self.search))
-                or not self.search[0] < 0 < self.search[1]):
-            raise WindowSelectionError("--search-energy-range requires finite MIN < 0 < MAX")
+                or not self.search[0] < self.search[1]):
+            raise WindowSelectionError("--search-energy-range requires finite MIN < MAX")
         if not math.isfinite(self.coverage) or not 0 < self.coverage < 1:
             raise WindowSelectionError("--outer-coverage must be finite and strictly between 0 and 1")
         if not math.isfinite(self.character_min) or not 0 <= self.character_min <= 1:
@@ -168,10 +168,13 @@ def select_adaptive(procar: ranker.ProcarData, eigenval: ranker.EigenvalData,
     ]
     quantile_envelope = (min(row["lower_relative"] for row in quantile_intervals),
                          max(row["upper_relative"] for row in quantile_intervals))
-    # A common window must contain every local equal-tail interval. Anchor it
-    # at E_F and round outward; count checks may expand it further, never trim it.
-    lowers = [a for a in _grid(0.0, search[0], -1) if a <= quantile_envelope[0]]
-    uppers = [b for b in _grid(0.0, search[1]) if b >= quantile_envelope[1]]
+    # Keep the E_F-relative quarter-eV grid, but allow both boundaries on
+    # either side of E_F. Count checks can expand the envelope, never trim it.
+    boundaries = sorted({search[0], search[1]} | {
+        i * 0.25 for i in range(math.ceil(search[0] / 0.25),
+                               math.floor(search[1] / 0.25) + 1)})
+    lowers = [a for a in boundaries if a <= quantile_envelope[0]]
+    uppers = [b for b in boundaries if b >= quantile_envelope[1]]
     initial_outer = (max(lowers), min(uppers))
     candidates = sorted(((a, b) for a in lowers for b in uppers if a < b),
                         key=lambda ab: (round(ab[1] - ab[0], 10),
@@ -194,13 +197,13 @@ def select_adaptive(procar: ranker.ProcarData, eigenval: ranker.EigenvalData,
     spins = [Spectrum(energies) for energies in spin_energies.values()]
     frozen = None
     best_key = None
-    rejected = {"margin_or_fermi": 0, "low_character": 0,
+    rejected = {"margin_or_width": 0, "low_character": 0,
                 "too_many_states": 0, "empty_spin": 0}
-    for lower in _grid(outer[0], 0.0):
-        for upper in _grid(outer[1], 0.0, -1):
+    for lower in _grid(outer[0], outer[1]):
+        for upper in _grid(outer[1], outer[0], -1):
             a, b = lower + options.frozen_margin, upper - options.frozen_margin
-            if a >= b or not a <= 0 <= b:
-                rejected["margin_or_fermi"] += 1
+            if a >= b:
+                rejected["margin_or_width"] += 1
                 continue
             if bad.count(a, b):
                 rejected["low_character"] += 1
@@ -254,7 +257,7 @@ def select_adaptive(procar: ranker.ProcarData, eigenval: ranker.EigenvalData,
             "intervals": quantile_intervals,
             "envelope_relative": list(quantile_envelope),
             "envelope_absolute": absolute(quantile_envelope),
-            "anchored_grid_relative": list(initial_outer),
+            "rounded_grid_relative": list(initial_outer),
             "expanded_for_state_count": any(spectrum.count(*initial_outer) < num_wann
                                             for _, spectrum in meshes),
             "expanded_for_nonzero_width": initial_outer[0] == initial_outer[1],
@@ -263,7 +266,7 @@ def select_adaptive(procar: ranker.ProcarData, eigenval: ranker.EigenvalData,
         "search_counts": count_summary(meshes, *search),
         "frozen_counts": count_summary(meshes, *frozen) if frozen else None,
         "frozen_rejections": rejected, "low_character_states_in_search": bad_states,
-        "outer_only_reason": ("No Fermi-containing frozen candidate satisfied character, state-count, "
+        "outer_only_reason": ("No frozen candidate inside the outer window satisfied character, state-count, "
                               "spin-occupancy and margin constraints.") if frozen is None else None,
         "band_edge_locations": edge_locations, "warnings": warnings,
         "validation_scope": "Supplied SCF/DOS meshes only; generated Wannier mesh is unverified. "

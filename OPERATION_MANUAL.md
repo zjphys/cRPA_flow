@@ -378,21 +378,22 @@ root `POTCAR` is reused; `prepare --force` does not regenerate it.
 
 **Adaptive selection (default).** Read the last finite SCF OUTCAR `E-fermi` and
 use one common energy reference. `--search-energy-range MIN MAX` defines the
-only search interval relative to this value (default `-15 20`; `MIN < 0 < MAX`).
+only search interval relative to this value (default `-20 20`; finite `MIN < MAX`).
+The search range and either selected window may lie entirely above or below `E_F`.
 There is no separate target interval or search padding. Window keywords are
 written in the original absolute energy convention.
 
 For each requested pair, independently at every SCF k-point and spin, sort
 the states within the search region by energy and accumulate their PAW weights.
-For `--outer-coverage C` (default 0.98), use weighted CDF probabilities
-`(1-C)/2` and `(1+C)/2`: the 1st and 99th percentiles by default. Each endpoint
+For `--outer-coverage C` (default 0.8), use weighted CDF probabilities
+`(1-C)/2` and `(1+C)/2`: the 10th and 90th percentiles by default. Each endpoint
 is the first energy where the cumulative fraction reaches its probability.
 This uses discrete band weights without smearing or interpolation. Endpoint
 states, including degeneracies, are included, so retained weight can exceed C.
 Zero-weight distributions are reported as unavailable.
 
 Combine all local intervals using the lowest lower percentile and highest
-upper percentile. Extend that span to contain `E_F` and round outward to the
+upper percentile. Round that span outward to the
 0.25 eV grid anchored at `E_F`, including exact search endpoints. If state
 counts require it, choose the narrowest further expansion containing at least
 `NUM_WANN` states at every SCF and DOS k-point. Ties prefer balance about `E_F`,
@@ -404,9 +405,9 @@ This replaces the shortest interval containing C of the local weight, which
 could discard nearly all of the allowed weight from one tail. Separate tail
 limits may give a wider window and do not guarantee avoiding the search ceiling.
 
-Frozen bounds are searched inward from the selected outer edges on the same
-0.25 eV grid, including zero and exact outer endpoints. After applying
-`--frozen-margin` (default 0.1 eV), the interval must contain `E_F`, contain no
+Frozen bounds are searched across the full outer interval in 0.25 eV steps
+inward from each outer edge, including exact outer endpoints. After applying
+`--frozen-margin` (default 0.1 eV), the interval must have positive width, contain no
 SCF state whose requested-pair weight divided by total PAW weight is below
 `--frozen-character-min` (default 0.70), and have at most `NUM_WANN` states at
 every SCF/DOS k-point. Zero-total-weight states are ineligible. There must be
@@ -416,11 +417,11 @@ then the lower lower-bound. Degenerate states are counted together.
 If no candidate passes, both `dis_froz_*` keywords are omitted: the result is
 an explicitly reported outer-only calculation.
 
-Both windows can be asymmetric. The outer window can be narrower than the
+Neither window is required to contain `E_F`. Both windows can be asymmetric.
+The outer window can be narrower than the
 former ±2 eV target, and the inner window can extend beyond those former
 bounds. A positive margin removes outer-edge states from frozen candidates;
-if no states remain in a spin channel, or if the outer window ends at `E_F`
-so an inward margin would exclude it, the result is outer-only.
+if no candidate retains states in every spin channel, the result is outer-only.
 
 The per-pair coverage denominator excludes bands outside the bounded region,
 so adding distant high-energy bands does not move the adaptive windows.
@@ -466,7 +467,9 @@ windows, minimum coverage per pair, unavailable distributions, rejected frozen
 candidate counts, low-character states in the search region, band-edge warnings and any
 outer-only explanation. `outer_selection` identifies `local_equal_tail_quantiles`;
 `outer_quantiles` records local percentile endpoints, their combined span,
-the Fermi-anchored grid span, and state-count/nonzero-width expansion flags.
+the rounded grid span (`rounded_grid_relative`), and state-count/nonzero-width
+expansion flags. Frozen rejections use `margin_or_width` for invalid shrunken
+intervals; there is no Fermi-containment rejection.
 Reaching a search/band boundary is reported and is
 not evidence of `NBANDS` convergence.
 
@@ -1244,7 +1247,7 @@ total_frontier_width
 
 ### 13.1 Normal and direct use
 
-Normal wrapper, using adaptive windows around the SCF Fermi level:
+Normal wrapper, using adaptive windows referenced to the SCF Fermi level:
 
 ```bash
 ./workflow.sh prepare-wannier \
@@ -1276,9 +1279,9 @@ python3 prepare_wannier.py \
 | `--num-bands N` | Number of top-ranked bands and `NUM_WANN`; overrides inference. | Inferred from POSCAR and projections |
 | `--kpr VALUE` | VASPKIT reciprocal resolution for Gamma mesh. | `0.04` |
 | `--frozen-margin EV` | Inward margin applied to both candidate frozen-window bounds. | `0.1` |
-| `--window-method adaptive\|legacy` | Fermi-centred proposals or previous ranking/window formulas. | `adaptive` |
-| `--search-energy-range MIN MAX` | Search interval relative to SCF E_F; finite MIN < 0 < MAX. | `-15 20` eV |
-| `--outer-coverage FRACTION` | Central local weight fraction; equal tails define percentiles for each pair/k-point/spin within the search region. Strictly between 0 and 1. | `0.98` |
+| `--window-method adaptive\|legacy` | Orbital-driven proposals or previous ranking/window formulas. | `adaptive` |
+| `--search-energy-range MIN MAX` | Search interval relative to SCF E_F; finite MIN < MAX, with no Fermi-containment requirement. | `-20 20` eV |
+| `--outer-coverage FRACTION` | Central local weight fraction; equal tails define percentiles for each pair/k-point/spin within the search region. Strictly between 0 and 1. | `0.8` |
 | `--frozen-character-min FRACTION` | Qualitative target/total PAW fraction in [0, 1]. | `0.70` |
 | `--vaspkit COMMAND` | VASPKIT command string. | `VASPKIT_BIN` or `vaspkit` |
 | `--force` | Replace an existing workflow-owned `04_wann`. | Off |

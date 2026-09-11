@@ -224,11 +224,11 @@ the matching POSCAR atom counts times shell multiplicities (s=1, p=3, d=5,
 f=7); --num-bands N overrides it. The command accepts --kpr VALUE
 (default KPR_WANN, 0.04), --frozen-margin EV (default 0.1), and --force.
 --window-method adaptive (default) uses paired SCF PROCAR weights and the last
-finite SCF OUTCAR E-fermi. --search-energy-range MIN MAX defaults to -15 20 eV
-relative to E_F. Both windows contain E_F; the inner is selected inside the
-outer. --outer-coverage FRACTION (0.98) selects equal-tail local percentiles
-(1%-99% by default) separately for every pair/k-point/spin. Their combined
-span is rounded outward and expanded as needed for E_F and NUM_WANN counts.
+finite SCF OUTCAR E-fermi. --search-energy-range MIN MAX defaults to -20 20 eV
+relative to E_F, with finite MIN < MAX. Neither window must contain E_F; the
+inner is selected inside the outer. --outer-coverage FRACTION (0.8) selects equal-tail local percentiles
+(10%-90% by default) separately for every pair/k-point/spin. Their combined
+span is rounded outward and expanded as needed for NUM_WANN counts.
 --frozen-character-min FRACTION (0.70) controls frozen PAW character.
 There is no separate target energy range.
 No acceptable frozen interval produces an explicitly reported outer-only input.

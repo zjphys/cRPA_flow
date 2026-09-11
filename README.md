@@ -89,8 +89,8 @@ are available:
 ./workflow.sh run-wannier
 ```
 
-Wannier preparation now defaults to Fermi-centred adaptive selection. It uses
-exact element-shell pairs (`Mn:d`, `Sb:p`) and searches from `E_F - 15` to
+Wannier preparation now defaults to orbital-driven adaptive selection. It uses
+exact element-shell pairs (`Mn:d`, `Sb:p`) and searches from `E_F - 20` to
 `E_F + 20` eV. For a different search range, for example:
 
 ```bash
@@ -98,14 +98,15 @@ exact element-shell pairs (`Mn:d`, `Sb:p`) and searches from `E_F - 15` to
   --search-energy-range -6 8
 ```
 
-The outer window starts from the weighted 1st–99th percentile interval of each
+The outer window starts from the weighted 10th–90th percentile interval of each
 pair at each SCF k-point and spin, using only states in the search region.
-Their combined span is extended to contain `E_F`, rounded outward to the
+Their combined span is rounded outward to the
 0.25 eV grid, and expanded if needed to contain at least `NUM_WANN` states on
 both supplied SCF/DOS meshes. Inclusive endpoints and expansion can retain
-more than 98% of the weight. There is no separate target interval or minimum
-±2 eV span. A frozen interval is selected inside the outer window and must contain `E_F`,
-pass the default 0.70 PAW target-character threshold, and fit `NUM_WANN`.
+more than 80% of the weight. There is no separate target interval or minimum
+±2 eV span. Neither window is required to contain `E_F`. A frozen interval is
+selected anywhere inside the outer window, must pass the default 0.70 PAW
+target-character threshold, and must fit `NUM_WANN`.
 If no interval passes, preparation writes an outer-only calculation. Inspect
 `04_wann/wannier_window_diagnostics.json` before running. These are heuristic
 proposals; the actual Wannier mesh, radial-shell identity and interpolation
@@ -113,7 +114,9 @@ accuracy are not validated by preparation.
 
 Use `--window-method legacy` for the previous scores and window formulas.
 Both modes now reject an outer window with too few states. Adaptive mode
-requires a finite `E-fermi` entry in `01_scf/OUTCAR`. See the operation manual
+requires a finite `E-fermi` entry in `01_scf/OUTCAR` as the energy reference.
+Search bounds need only satisfy finite `MIN < MAX`; one-sided ranges such as
+`--search-energy-range 2 8` are accepted. See the operation manual
 for all thresholds and diagnostics.
 
 `--search-energy-range` replaces the former `--target-energy-range` and
@@ -141,7 +144,7 @@ parameters must still be checked for physical validity and convergence.
 | `postprocess.py` | Generates element- or orbital-projected band and DOS figures from VASPKIT data. It supports spin-polarized data, multiple output formats, reusable projection data, and optional Wannier-band overlays. |
 | `rank_wannier_bands.py` | Ranks bands using k-point-weighted aggregate shell projections from the full SCF `PROCAR`, combines them with DOS-mesh energy extrema, and can write a machine-readable CSV report. |
 | `prepare_wannier.py` | Builds the `04_wann` stage from completed SCF and DOS outputs, infers or accepts `NUM_WANN`, determines energy windows, generates the Gamma-centered mesh, and writes Wannier inputs. |
-| `wannier_windows.py` | Standard-library helper implementing bounded Fermi-centred window selection and SCF/DOS state-count diagnostics; copy it alongside `prepare_wannier.py`. |
+| `wannier_windows.py` | Standard-library helper implementing bounded orbital-driven window selection and SCF/DOS state-count diagnostics; copy it alongside `prepare_wannier.py`. |
 | `prepare_crpa.py` | Builds the `05_crpa` stage from completed Wannier outputs, validates selected target-state indices, applies cRPA defaults or overrides, and copies the required restart files. |
 | `workflow.conf` | Central configuration for executables, environment setup, Slurm resources, k-point resolution, calculation defaults, and stage-specific INCAR and job templates. |
 

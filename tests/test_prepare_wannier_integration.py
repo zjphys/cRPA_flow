@@ -142,6 +142,8 @@ NBANDS = 36
         report = json.loads((stage / "wannier_window_diagnostics.json").read_text())
         self.assertEqual(report["method"], "adaptive")
         self.assertEqual(report["fermi_energy"], 0.0)
+        self.assertEqual(report["parameters"]["search_energy_range"], [-20, 20])
+        self.assertEqual(report["parameters"]["outer_coverage"], 0.8)
         self.assertEqual(report["windows_relative"]["outer"], [-1, 1.5])
         self.assertIsNone(report["windows_relative"]["frozen"])
         self.assertTrue(report["outer_only_reason"])
@@ -185,6 +187,33 @@ NBANDS = 36
         self.assertIn("dis_froz_min = -1", text)
         self.assertIn("dis_froz_max = 1.45", text)
         self.assertIsNone(report["outer_only_reason"])
+
+    def test_adaptive_cli_writes_windows_on_either_side_of_fermi(self) -> None:
+        for fermi, bounds in ((-10, (8, 12)), (10, (-12, -8))):
+            with self.subTest(fermi=fermi):
+                with (self.scf / "OUTCAR").open("a") as handle:
+                    handle.write(f"E-fermi : {fermi}\n")
+                result = subprocess.run(
+                    [sys.executable, "-B", str(SOURCE_DIR / "prepare_wannier.py"),
+                     "--root", str(self.root), "--elements", "Mn", "Sb", "--orbitals", "d", "p",
+                     "--num-bands", "2", "--vaspkit", self.vaspkit, "--force",
+                     "--search-energy-range", *map(str, bounds), "--frozen-character-min", "0.5"],
+                    capture_output=True, text=True, check=False)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                stage = self.root / "04_wann"
+                report = json.loads((stage / "wannier_window_diagnostics.json").read_text())
+                incar = (stage / "INCAR").read_text()
+                for name, keyword in (("outer", "dis_win"), ("frozen", "dis_froz")):
+                    relative = report["windows_relative"][name]
+                    absolute = report["windows_absolute"][name]
+                    self.assertIsNotNone(relative)
+                    self.assertTrue(relative[1] < 0 or relative[0] > 0)
+                    self.assertGreaterEqual(relative[0], bounds[0])
+                    self.assertLessEqual(relative[1], bounds[1])
+                    for value, energy, suffix in zip(relative, absolute, ("min", "max")):
+                        self.assertAlmostEqual(energy, value + fermi)
+                        self.assertIn(f"{keyword}_{suffix} = {energy:g}\n", incar)
+                self.assertIsNone(report["outer_only_reason"])
 
     def test_prepares_complete_stage_and_force_replaces_it(self) -> None:
         stage, frontier, nbands, num_wann = preparer.prepare_wannier(

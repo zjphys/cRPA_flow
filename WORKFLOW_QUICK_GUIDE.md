@@ -159,7 +159,7 @@ Other useful plotting controls are `--marker-scale`, `--vaspkit`, and repeated
 
 Choose positionally paired element/orbital projections and the number of
 Wannier functions. Adaptive selection is the default: search for the requested
-orbital subspace from `E_F - 15` to `E_F + 20` eV using the last finite SCF
+orbital subspace from `E_F - 20` to `E_F + 20` eV using the last finite SCF
 OUTCAR Fermi value. It scores exact pairs (`Mn:d`, `Sb:p`) at each SCF k-point,
 without requiring a contiguous band-index block. The ranking CSV remains a
 separate report; it does not define the adaptive windows.
@@ -197,8 +197,8 @@ Example with every optional preparation control:
   --kpr 0.04 \
   --frozen-margin 0.1 \
   --window-method adaptive \
-  --search-energy-range -15 20 \
-  --outer-coverage 0.98 \
+  --search-energy-range -20 20 \
+  --outer-coverage 0.8 \
   --frozen-character-min 0.70 \
   --vaspkit vaspkit \
   --force
@@ -216,25 +216,27 @@ Inspect `04_wann/OUTCAR`, the Wannier90 output, interpolated bands, and
 inspect `04_wann/wannier_window_diagnostics.json` for selected absolute and
 relative windows, coverage, limiting counts, and warnings.
 
-The outer window combines the weighted 1st–99th percentile intervals of every
+The outer window combines the weighted 10th–90th percentile intervals of every
 nonzero pair/k-point/spin distribution within the bounded search region.
 `--outer-coverage C` sets the percentile probabilities to `(1-C)/2` and `(1+C)/2`.
-The combined span is extended to contain `E_F`, rounded outward to the 0.25 eV
+The combined span is rounded outward to the 0.25 eV
 grid, and expanded as needed to fit at least `NUM_WANN` states at every SCF/DOS
 k-point. Diagnostics record the percentile span and whether counts forced
 expansion. Inclusive endpoints and expansion can retain more than the requested
 fraction; the outer window can still reach a search boundary.
 There is no separate target interval. Bands outside that region
 cannot move the windows. A frozen interval is selected inside the outer and
-must contain `E_F`, pass the PAW character threshold, fit `NUM_WANN` on both
+must pass the PAW character threshold, fit `NUM_WANN` on both
 SCF/DOS meshes, and contain states in each spin channel. When no frozen
 candidate passes, preparation explicitly writes an outer-only calculation.
 PAW character is a heuristic, not a radial-shell label or a proof of
 interpolation accuracy; the generated Wannier mesh remains unverified.
 
 `--search-energy-range` replaces the former target-range and padding options.
-The default search bounds are −15 to +20 eV relative to `E_F`; final windows are free to be narrower
-or asymmetric. The inner window is no longer restricted to ±2 eV.
+The default search bounds are −20 to +20 eV relative to `E_F`; final windows are free to be narrower
+or asymmetric, and neither window must contain `E_F`. Search bounds only need
+finite `MIN < MAX`, so `--search-energy-range 2 8` is also valid. The inner
+window is no longer restricted to ±2 eV.
 
 Use `--window-method legacy` to retain the previous cross-product ranking,
 largest contiguous run and guarded frozen-window formulas. Both modes now

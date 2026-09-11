@@ -64,7 +64,7 @@ class AdaptiveWindowTests(unittest.TestCase):
         with self.assertRaisesRegex(preparer.WannierPreparationError, "duplicate"):
             preparer.paired_projections(["Mn", "mn"], ["d", "D"])
 
-    def test_fermi_anchored_windows_and_shift_invariance(self):
+    def test_fermi_reference_shift_invariance(self):
         channels = {"none": [[(-1, 1, 0, 0), (0, 1, 1, 0), (1, 0, 1, 0)]]}
         outer, frozen, report = self.select(channels, num_wann=3)
         self.assertEqual(outer, [-1, 1])
@@ -86,7 +86,7 @@ class AdaptiveWindowTests(unittest.TestCase):
         # [0, 5] holds 98.5%, but drops more than 1% from the lower tail.
         channels = {"none": [[(-15, 0.015, 0.015, 0), (0, 0.97, 0.97, 0),
                                (5, 0.015, 0.015, 0)]]}
-        outer, _, report = self.select(channels)
+        outer, _, report = self.select(channels, coverage=0.98)
         self.assertEqual(outer, [-15, 5])
         self.assertEqual(report["outer_selection"], "local_equal_tail_quantiles")
         self.assertEqual(report["outer_quantiles"]["envelope_relative"], [-15, 5])
@@ -99,7 +99,7 @@ class AdaptiveWindowTests(unittest.TestCase):
         self.assertEqual(outer, [-2.25, 3.25])
         quantiles = report["outer_quantiles"]
         self.assertEqual(quantiles["envelope_relative"], [-2.13, 3.11])
-        self.assertEqual(quantiles["anchored_grid_relative"], outer)
+        self.assertEqual(quantiles["rounded_grid_relative"], outer)
         self.assertEqual(len(quantiles["intervals"]), 2)
         for pair in report["coverage_by_pair"]:
             self.assertAlmostEqual(pair["minimum"]["coverage"], 0.99)
@@ -117,8 +117,8 @@ class AdaptiveWindowTests(unittest.TestCase):
     def test_custom_coverage_sets_equal_tail_probabilities(self):
         channels = {"none": [[(-15, 0.05, 0.05, 0), (-1, 0.45, 0.45, 0),
                                (1, 0.45, 0.45, 0), (20, 0.05, 0.05, 0)]]}
-        self.assertEqual(self.select(channels)[0], [-15, 20])
-        outer, _, report = self.select(channels, coverage=0.8)
+        self.assertEqual(self.select(channels, coverage=0.98)[0], [-15, 20])
+        outer, _, report = self.select(channels)
         self.assertEqual(outer, [-1, 1])
         low, high = report["outer_quantiles"]["probabilities"]
         self.assertAlmostEqual(low, 0.1)
@@ -155,7 +155,7 @@ class AdaptiveWindowTests(unittest.TestCase):
         self.assertEqual(outer, [-1, 3.25])
         self.assertEqual(report["outer_counts"]["minimum"]["count"], 2)
         self.assertEqual(report["outer_quantiles"]["envelope_relative"], [-1, 1])
-        self.assertEqual(report["outer_quantiles"]["anchored_grid_relative"], [-1, 1])
+        self.assertEqual(report["outer_quantiles"]["rounded_grid_relative"], [-1, 1])
         self.assertTrue(report["outer_quantiles"]["expanded_for_state_count"])
 
     def test_states_just_outside_bounds_do_not_satisfy_outer_count(self):
@@ -212,7 +212,7 @@ class AdaptiveWindowTests(unittest.TestCase):
         self.assertIsNone(frozen)
 
     def test_options_and_fermi_validation(self):
-        for kwargs in ({"search": (0, 2)}, {"search": (-1, float("inf"))},
+        for kwargs in ({"search": (2, 2)}, {"search": (-1, float("inf"))},
                        {"search": (2, -2)}, {"coverage": 1}, {"coverage": float("nan")},
                        {"character_min": 1.1}, {"frozen_margin": -1}):
             with self.subTest(kwargs=kwargs), self.assertRaises(selector.WindowSelectionError):
@@ -227,7 +227,10 @@ class AdaptiveWindowTests(unittest.TestCase):
     def test_cli_defaults_and_overrides(self):
         args = preparer.parse_args(["--elements", "Mn", "--orbitals", "d"])
         self.assertEqual(args.window_method, "adaptive")
-        self.assertEqual(tuple(args.search_energy_range), (-15, 20))
+        self.assertEqual(tuple(args.search_energy_range), (-20, 20))
+        self.assertEqual(args.outer_coverage, 0.8)
+        self.assertEqual(selector.WindowOptions().search, (-20, 20))
+        self.assertEqual(selector.WindowOptions().coverage, 0.8)
         args = preparer.parse_args(["--elements", "Mn", "--orbitals", "d",
                                    "--window-method", "legacy", "--search-energy-range", "-1", "3",
                                    "--outer-coverage", "0.95",
@@ -263,10 +266,47 @@ class AdaptiveWindowTests(unittest.TestCase):
                                   search=(-0.3, 0.4))
         self.assertEqual(outer, [-0.3, 0.4])
 
-    def test_one_sided_states_keep_fermi_anchor(self):
+    def test_one_sided_outer_does_not_expand_to_fermi(self):
         outer, frozen, _ = self.select({"none": [[(5, 1, 0, 0), (6, 0, 1, 0)]]})
-        self.assertEqual(outer, [0, 6])
-        self.assertIsNone(frozen)  # Positive inward margin would exclude E_F.
+        self.assertEqual(outer, [5, 6])
+        self.assertIsNone(frozen)  # The margin excludes both available states.
+
+    def test_both_windows_can_lie_above_or_below_fermi(self):
+        for low, high in ((5, 7), (-7, -5)):
+            channels = {"none": [[(low, 1, 0, 0), (low + 1, 1, 1, 0),
+                                    (high, 0, 1, 0)]]}
+            for search in ((-20, 20), (low - 0.13, high + 0.11)):
+                with self.subTest(low=low, search=search):
+                    outer, frozen, report = self.select(channels, num_wann=3, search=search)
+                    self.assertEqual(outer, [low, high])
+                    self.assertEqual(frozen, [low + 0.1, high - 0.1])
+                    shifted = self.select(channels, num_wann=3, search=search, shift=17.125)
+                    self.assertEqual(report["windows_relative"], shifted[2]["windows_relative"])
+                    for old, new in zip(outer + frozen, shifted[0] + shifted[1]):
+                        self.assertAlmostEqual(new - old, 17.125)
+
+    def test_frozen_can_avoid_low_character_and_excess_states_at_fermi(self):
+        channels = {"none": [[(-4, 0.2, 0, 0), (-3, 0.2, 0, 0), (-2, 0.2, 0, 0),
+                                (0, 0, 0, 1), (2, 0, 1, 0), (3, 0, 1, 0), (4, 0, 1, 0)]]}
+        outer, frozen, report = self.select(channels, num_wann=3,
+                                            dos={"none": [[-4, 0, 0, 0, 0, 2, 3]]})
+        self.assertEqual(outer, [-4, 4])
+        self.assertEqual(frozen, [0.1, 3.9])
+        self.assertGreater(report["frozen_rejections"]["low_character"], 0)
+        self.assertLessEqual(report["frozen_counts"]["maximum"]["count"], 3)
+
+    def test_one_sided_search_endpoints_and_count_expansion(self):
+        channels = {"none": [[(5.13, 1, 0, 0), (6.11, 0, 1, 0)]]}
+        outer, _, report = self.select(channels, search=(5.13, 7.11),
+                                       dos={"none": [[5.13, 7.11]]})
+        self.assertEqual(outer, [5.13, 7.11])
+        self.assertTrue(report["outer_quantiles"]["expanded_for_state_count"])
+        with self.assertRaisesRegex(selector.WindowSelectionError, "limiting state count"):
+            self.select(channels, search=(5.13, 7), dos={"none": [[5.13, 7.11]]})
+
+    def test_search_may_start_or_end_at_fermi(self):
+        for search in ((0, 2), (-2, 0)):
+            selector.WindowOptions(search=search).validate()
 
     def test_outer_only_incar_and_joint_optional_bounds(self):
         text = preparer.rewrite_incar("ENCUT=520", "test", 4, 2, ["Mn:d"],

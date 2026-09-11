@@ -660,8 +660,8 @@ def prepare_wannier(
     frozen_margin: float = 0.1,
     *,
     window_method: str = "adaptive",
-    search_energy_range: Sequence[float] = (-15.0, 20.0),
-    outer_coverage: float = 0.98,
+    search_energy_range: Sequence[float] = (-20.0, 20.0),
+    outer_coverage: float = 0.8,
     frozen_character_min: float = 0.70,
 ) -> tuple[Path, ranker.EnergyFrontier, int, int]:
     """Create a complete workflow-owned 04_wann directory."""
@@ -877,11 +877,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="VASPKIT command (default: VASPKIT_BIN or vaspkit)",
     )
     parser.add_argument("--window-method", choices=("adaptive", "legacy"), default="adaptive",
-                        help="Fermi-centred adaptive selection (default), or legacy formulas")
-    parser.add_argument("--search-energy-range", type=float, nargs=2, default=(-15.0, 20.0),
-                        metavar=("MIN", "MAX"), help="search bounds relative to SCF E_F (default: -15 20 eV)")
-    parser.add_argument("--outer-coverage", type=float, default=0.98,
-                        help="central local weight fraction; equal tails define outer percentiles (default: 0.98)")
+                        help="orbital-driven adaptive selection (default), or legacy formulas")
+    parser.add_argument("--search-energy-range", type=float, nargs=2, default=(-20.0, 20.0),
+                        metavar=("MIN", "MAX"), help="finite MIN < MAX relative to SCF E_F; need not contain E_F (default: -20 20 eV)")
+    parser.add_argument("--outer-coverage", type=float, default=0.8,
+                        help="central local weight fraction; equal tails define outer percentiles (default: 0.8)")
     parser.add_argument("--frozen-character-min", type=float, default=0.70,
                         help="minimum qualitative PAW target fraction for freezing (default: 0.70)")
     parser.add_argument("--force", action="store_true")
