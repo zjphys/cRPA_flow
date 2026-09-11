@@ -216,9 +216,15 @@ Inspect `04_wann/OUTCAR`, the Wannier90 output, interpolated bands, and
 inspect `04_wann/wannier_window_diagnostics.json` for selected absolute and
 relative windows, coverage, limiting counts, and warnings.
 
-The narrowest acceptable outer window contains `E_F` and retains the requested
-coverage for every nonzero pair/k-point/spin distribution within the bounded
-search region. There is no separate target interval. Bands outside that region
+The outer window combines the weighted 1st–99th percentile intervals of every
+nonzero pair/k-point/spin distribution within the bounded search region.
+`--outer-coverage C` sets the percentile probabilities to `(1-C)/2` and `(1+C)/2`.
+The combined span is extended to contain `E_F`, rounded outward to the 0.25 eV
+grid, and expanded as needed to fit at least `NUM_WANN` states at every SCF/DOS
+k-point. Diagnostics record the percentile span and whether counts forced
+expansion. Inclusive endpoints and expansion can retain more than the requested
+fraction; the outer window can still reach a search boundary.
+There is no separate target interval. Bands outside that region
 cannot move the windows. A frozen interval is selected inside the outer and
 must contain `E_F`, pass the PAW character threshold, fit `NUM_WANN` on both
 SCF/DOS meshes, and contain states in each spin channel. When no frozen

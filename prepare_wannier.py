@@ -811,6 +811,12 @@ def prepare_wannier(
     if diagnostics["fermi_energy"] is not None:
         print(f"SCF E_F (eV): {diagnostics['fermi_energy']:g}; "
               f"search relative to E_F: {list(options.search)} eV")
+        quantiles = diagnostics["outer_quantiles"]
+        low, high = quantiles["probabilities"]
+        print(f"Outer selection: local {100 * low:g}%-{100 * high:g}% cumulative-weight intervals")
+        print(f"Combined percentile span (absolute eV): {quantiles['envelope_absolute']}")
+        if quantiles["expanded_for_state_count"]:
+            print("Outer percentile span expanded to satisfy NUM_WANN state counts")
         for pair in diagnostics["coverage_by_pair"]:
             minimum = pair["minimum"]
             print(f"Local coverage {pair['pair']}: " +
@@ -875,7 +881,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--search-energy-range", type=float, nargs=2, default=(-15.0, 20.0),
                         metavar=("MIN", "MAX"), help="search bounds relative to SCF E_F (default: -15 20 eV)")
     parser.add_argument("--outer-coverage", type=float, default=0.98,
-                        help="minimum per-pair local coverage (default: 0.98)")
+                        help="central local weight fraction; equal tails define outer percentiles (default: 0.98)")
     parser.add_argument("--frozen-character-min", type=float, default=0.70,
                         help="minimum qualitative PAW target fraction for freezing (default: 0.70)")
     parser.add_argument("--force", action="store_true")

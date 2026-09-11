@@ -98,11 +98,13 @@ exact element-shell pairs (`Mn:d`, `Sb:p`) and searches from `E_F - 15` to
   --search-energy-range -6 8
 ```
 
-The outer window retains at least 98% of each pair's weight within the bounded
-search region at each SCF k-point and spin, contains `E_F`, and contains at least
-`NUM_WANN` states on both supplied SCF/DOS meshes. The narrowest passing
-interval is selected; there is no separate target interval or minimum ±2 eV
-span. A frozen interval is selected inside the outer window and must contain `E_F`,
+The outer window starts from the weighted 1st–99th percentile interval of each
+pair at each SCF k-point and spin, using only states in the search region.
+Their combined span is extended to contain `E_F`, rounded outward to the
+0.25 eV grid, and expanded if needed to contain at least `NUM_WANN` states on
+both supplied SCF/DOS meshes. Inclusive endpoints and expansion can retain
+more than 98% of the weight. There is no separate target interval or minimum
+±2 eV span. A frozen interval is selected inside the outer window and must contain `E_F`,
 pass the default 0.70 PAW target-character threshold, and fit `NUM_WANN`.
 If no interval passes, preparation writes an outer-only calculation. Inspect
 `04_wann/wannier_window_diagnostics.json` before running. These are heuristic

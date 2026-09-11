@@ -226,8 +226,11 @@ f=7); --num-bands N overrides it. The command accepts --kpr VALUE
 --window-method adaptive (default) uses paired SCF PROCAR weights and the last
 finite SCF OUTCAR E-fermi. --search-energy-range MIN MAX defaults to -15 20 eV
 relative to E_F. Both windows contain E_F; the inner is selected inside the
-outer. --outer-coverage FRACTION (0.98) and --frozen-character-min FRACTION (0.70)
-control bounded adaptive selection. There is no separate target energy range.
+outer. --outer-coverage FRACTION (0.98) selects equal-tail local percentiles
+(1%-99% by default) separately for every pair/k-point/spin. Their combined
+span is rounded outward and expanded as needed for E_F and NUM_WANN counts.
+--frozen-character-min FRACTION (0.70) controls frozen PAW character.
+There is no separate target energy range.
 No acceptable frozen interval produces an explicitly reported outer-only input.
 --window-method legacy retains the old ranking and window formulas. Both modes
 check outer state counts on SCF/DOS meshes and write

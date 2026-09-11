@@ -382,14 +382,27 @@ only search interval relative to this value (default `-15 20`; `MIN < 0 < MAX`).
 There is no separate target interval or search padding. Window keywords are
 written in the original absolute energy convention.
 
-Candidate outer bounds advance outward from `E_F` in 0.25 eV steps, including
-the exact search endpoints. Zero-width candidates are excluded. The narrowest
-interval containing `E_F` must retain `--outer-coverage` (default 0.98) of
-each requested pair's weight within the search region, independently at every
-SCF k-point and spin. Zero-weight distributions are reported as unavailable.
-Ties prefer balance about `E_F`, then the lower lower-bound. Every SCF and DOS
-k-point must also have at least `NUM_WANN` states inside. If none passes,
-preparation stops; it never silently enlarges the search region.
+For each requested pair, independently at every SCF k-point and spin, sort
+the states within the search region by energy and accumulate their PAW weights.
+For `--outer-coverage C` (default 0.98), use weighted CDF probabilities
+`(1-C)/2` and `(1+C)/2`: the 1st and 99th percentiles by default. Each endpoint
+is the first energy where the cumulative fraction reaches its probability.
+This uses discrete band weights without smearing or interpolation. Endpoint
+states, including degeneracies, are included, so retained weight can exceed C.
+Zero-weight distributions are reported as unavailable.
+
+Combine all local intervals using the lowest lower percentile and highest
+upper percentile. Extend that span to contain `E_F` and round outward to the
+0.25 eV grid anchored at `E_F`, including exact search endpoints. If state
+counts require it, choose the narrowest further expansion containing at least
+`NUM_WANN` states at every SCF and DOS k-point. Ties prefer balance about `E_F`,
+then the lower lower-bound. Zero-width windows are expanded to positive width.
+If no expansion passes, preparation stops; it never silently enlarges the
+search region. The percentile span is never trimmed to satisfy counts.
+
+This replaces the shortest interval containing C of the local weight, which
+could discard nearly all of the allowed weight from one tail. Separate tail
+limits may give a wider window and do not guarantee avoiding the search ceiling.
 
 Frozen bounds are searched inward from the selected outer edges on the same
 0.25 eV grid, including zero and exact outer endpoints. After applying
@@ -451,7 +464,10 @@ parameters, projection pairs, windows, limiting count locations and validation
 scope. Adaptive reports additionally include the Fermi reference, relative
 windows, minimum coverage per pair, unavailable distributions, rejected frozen
 candidate counts, low-character states in the search region, band-edge warnings and any
-outer-only explanation. Reaching a search/band boundary is reported and is
+outer-only explanation. `outer_selection` identifies `local_equal_tail_quantiles`;
+`outer_quantiles` records local percentile endpoints, their combined span,
+the Fermi-anchored grid span, and state-count/nonzero-width expansion flags.
+Reaching a search/band boundary is reported and is
 not evidence of `NBANDS` convergence.
 
 ### 4.3 Band counts
@@ -1262,7 +1278,7 @@ python3 prepare_wannier.py \
 | `--frozen-margin EV` | Inward margin applied to both candidate frozen-window bounds. | `0.1` |
 | `--window-method adaptive\|legacy` | Fermi-centred proposals or previous ranking/window formulas. | `adaptive` |
 | `--search-energy-range MIN MAX` | Search interval relative to SCF E_F; finite MIN < 0 < MAX. | `-15 20` eV |
-| `--outer-coverage FRACTION` | Per-pair coverage within bounded search region; strictly between 0 and 1. | `0.98` |
+| `--outer-coverage FRACTION` | Central local weight fraction; equal tails define percentiles for each pair/k-point/spin within the search region. Strictly between 0 and 1. | `0.98` |
 | `--frozen-character-min FRACTION` | Qualitative target/total PAW fraction in [0, 1]. | `0.70` |
 | `--vaspkit COMMAND` | VASPKIT command string. | `VASPKIT_BIN` or `vaspkit` |
 | `--force` | Replace an existing workflow-owned `04_wann`. | Off |

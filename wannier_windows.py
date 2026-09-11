@@ -68,6 +68,15 @@ class Spectrum:
         left, right = self.indices(low, high)
         return max(0.0, self.prefix[right] - self.prefix[left])
 
+    def quantile(self, fraction):
+        """First energy whose cumulative weight reaches the requested fraction.
+
+        Use the discrete weighted CDF, without interpolation or smearing.
+        Call only for a positive-weight spectrum and 0 < fraction < 1.
+        """
+        index = bisect_left(self.prefix, fraction * self.prefix[-1]) - 1
+        return self.energies[max(0, index)]
+
 
 def energy_meshes(procar: ranker.ProcarData, eigenval: ranker.EigenvalData, fermi: float = 0.0):
     """Return independent per-k-point spectra; never join the two meshes."""
@@ -151,8 +160,19 @@ def select_adaptive(procar: ranker.ProcarData, eigenval: ranker.EigenvalData,
     if requested_weight <= 0:
         raise WindowSelectionError("requested orbital set has no weight in the search energy interval")
 
-    lowers = _grid(0.0, search[0], -1)
-    uppers = _grid(0.0, search[1])
+    tail_fraction = (1.0 - options.coverage) / 2.0
+    quantile_intervals = [
+        {**location, "lower_relative": spectrum.quantile(tail_fraction),
+         "upper_relative": spectrum.quantile(1.0 - tail_fraction)}
+        for location, spectrum, _ in distributions
+    ]
+    quantile_envelope = (min(row["lower_relative"] for row in quantile_intervals),
+                         max(row["upper_relative"] for row in quantile_intervals))
+    # A common window must contain every local equal-tail interval. Anchor it
+    # at E_F and round outward; count checks may expand it further, never trim it.
+    lowers = [a for a in _grid(0.0, search[0], -1) if a <= quantile_envelope[0]]
+    uppers = [b for b in _grid(0.0, search[1]) if b >= quantile_envelope[1]]
+    initial_outer = (max(lowers), min(uppers))
     candidates = sorted(((a, b) for a in lowers for b in uppers if a < b),
                         key=lambda ab: (round(ab[1] - ab[0], 10),
                                         round(abs(ab[0] + ab[1]), 10), ab[0]))
@@ -160,10 +180,8 @@ def select_adaptive(procar: ranker.ProcarData, eigenval: ranker.EigenvalData,
     for a, b in candidates:
         if any(spectrum.count(a, b) < num_wann for _, spectrum in meshes):
             continue
-        if all(spectrum.weight(a, b) / total >= options.coverage - 1e-12
-               for _, spectrum, total in distributions):
-            outer = (a, b)
-            break
+        outer = (a, b)
+        break
     if outer is None:
         limiting = count_summary(meshes, *search)["minimum"]
         raise WindowSelectionError(
@@ -219,7 +237,9 @@ def select_adaptive(procar: ranker.ProcarData, eigenval: ranker.EigenvalData,
         return [value + fermi for value in interval] if interval else None
     report = {
         "method": "adaptive", "fermi_energy": fermi,
+        "outer_selection": "local_equal_tail_quantiles",
         "parameters": {"search_energy_range": list(search), "outer_coverage": options.coverage,
+                       "tail_fraction": tail_fraction,
                        "frozen_character_min": options.character_min,
                        "frozen_margin": options.frozen_margin, "grid_step": 0.25},
         "projection_pairs": list(labels), "num_wann": num_wann,
@@ -228,6 +248,17 @@ def select_adaptive(procar: ranker.ProcarData, eigenval: ranker.EigenvalData,
         "windows_absolute": {"search": absolute(search),
                              "outer": absolute(outer), "frozen": absolute(frozen)},
         "coverage_by_pair": coverage, "unavailable_coverage": unavailable,
+        "outer_quantiles": {
+            "scope": "each nonzero pair/k-point/spin distribution within the search range",
+            "probabilities": [tail_fraction, 1.0 - tail_fraction],
+            "intervals": quantile_intervals,
+            "envelope_relative": list(quantile_envelope),
+            "envelope_absolute": absolute(quantile_envelope),
+            "anchored_grid_relative": list(initial_outer),
+            "expanded_for_state_count": any(spectrum.count(*initial_outer) < num_wann
+                                            for _, spectrum in meshes),
+            "expanded_for_nonzero_width": initial_outer[0] == initial_outer[1],
+        },
         "outer_counts": count_summary(meshes, *outer),
         "search_counts": count_summary(meshes, *search),
         "frozen_counts": count_summary(meshes, *frozen) if frozen else None,

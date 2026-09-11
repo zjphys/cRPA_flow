@@ -82,6 +82,54 @@ class AdaptiveWindowTests(unittest.TestCase):
         self.assertEqual(old[:2], new[:2])
         self.assertEqual(old[2]["coverage_by_pair"], new[2]["coverage_by_pair"])
 
+    def test_equal_tail_quantiles_replace_shortest_coverage_interval(self):
+        # [0, 5] holds 98.5%, but drops more than 1% from the lower tail.
+        channels = {"none": [[(-15, 0.015, 0.015, 0), (0, 0.97, 0.97, 0),
+                               (5, 0.015, 0.015, 0)]]}
+        outer, _, report = self.select(channels)
+        self.assertEqual(outer, [-15, 5])
+        self.assertEqual(report["outer_selection"], "local_equal_tail_quantiles")
+        self.assertEqual(report["outer_quantiles"]["envelope_relative"], [-15, 5])
+        self.assertFalse(report["outer_quantiles"]["expanded_for_state_count"])
+
+    def test_quantiles_trim_both_tails_and_round_outward(self):
+        channels = {"none": [[(-15, 0.005, 0.005, 0), (-2.13, 0.495, 0.495, 0),
+                               (3.11, 0.495, 0.495, 0), (20, 0.005, 0.005, 0)]]}
+        outer, _, report = self.select(channels)
+        self.assertEqual(outer, [-2.25, 3.25])
+        quantiles = report["outer_quantiles"]
+        self.assertEqual(quantiles["envelope_relative"], [-2.13, 3.11])
+        self.assertEqual(quantiles["anchored_grid_relative"], outer)
+        self.assertEqual(len(quantiles["intervals"]), 2)
+        for pair in report["coverage_by_pair"]:
+            self.assertAlmostEqual(pair["minimum"]["coverage"], 0.99)
+        self.assertFalse(report["warnings"])
+
+    def test_quantile_envelope_preserves_each_pair_and_kpoint(self):
+        channels = {"none": [
+            [(-8, 0.005, 0, 0), (-2, 0.495, 0, 0), (1, 0.5, 1, 0), (20, 0, 0, 1)],
+            [(-10, 0, 0, 1), (0, 100, 0, 0), (4, 0, 0.001, 0), (20, 0, 0, 1)],
+        ]}
+        outer, _, report = self.select(channels)
+        self.assertEqual(outer, [-2, 4])
+        self.assertEqual(len(report["outer_quantiles"]["intervals"]), 4)
+
+    def test_custom_coverage_sets_equal_tail_probabilities(self):
+        channels = {"none": [[(-15, 0.05, 0.05, 0), (-1, 0.45, 0.45, 0),
+                               (1, 0.45, 0.45, 0), (20, 0.05, 0.05, 0)]]}
+        self.assertEqual(self.select(channels)[0], [-15, 20])
+        outer, _, report = self.select(channels, coverage=0.8)
+        self.assertEqual(outer, [-1, 1])
+        low, high = report["outer_quantiles"]["probabilities"]
+        self.assertAlmostEqual(low, 0.1)
+        self.assertAlmostEqual(high, 0.9)
+
+    def test_quantiles_keep_degenerate_endpoint_states(self):
+        spectrum = selector.Spectrum([-15, -2, -2, 3, 20], [0, 0.005, 0.495, 0.5, 0])
+        self.assertEqual(spectrum.quantile(0.01), -2)
+        self.assertEqual(spectrum.quantile(0.99), 3)
+        self.assertEqual(spectrum.weight(-2, 3), 1)
+
     def test_local_high_energy_character_can_expand_both_windows(self):
         outer, frozen, report = self.select({"none": [[(-1, 1, 0, 0), (1, 0, 1, 0), (5, 1, 0, 0)]]})
         self.assertEqual(outer, [-1, 5])
@@ -106,6 +154,9 @@ class AdaptiveWindowTests(unittest.TestCase):
         outer, _, report = self.select(channels, dos=dos)
         self.assertEqual(outer, [-1, 3.25])
         self.assertEqual(report["outer_counts"]["minimum"]["count"], 2)
+        self.assertEqual(report["outer_quantiles"]["envelope_relative"], [-1, 1])
+        self.assertEqual(report["outer_quantiles"]["anchored_grid_relative"], [-1, 1])
+        self.assertTrue(report["outer_quantiles"]["expanded_for_state_count"])
 
     def test_states_just_outside_bounds_do_not_satisfy_outer_count(self):
         channels = {"none": [[(-1, 1, 0, 0), (1, 0, 1, 0)]]}
