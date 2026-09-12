@@ -332,9 +332,9 @@ When `ENCUT=auto`, the workflow reads every `ENMAX` value from the root
 up to the next 5 eV:
 
 $$
-\mathrm{ENCUT}=5\,\mathrm{eV}\,
+\mathrm{ENCUT}=(5\mathrm{eV})\times
 \left\lceil
-\frac{f_{\mathrm{ENCUT}}\,\max_i \mathrm{ENMAX}_i}{5\,\mathrm{eV}}
+\frac{f_{\mathrm{ENCUT}}\times\max_i \mathrm{ENMAX}_i}{5\mathrm{eV}}
 \right\rceil.
 $$
 
