@@ -332,10 +332,14 @@ When `ENCUT=auto`, the workflow reads every `ENMAX` value from the root
 up to the next 5 eV:
 
 $$
-\mathrm{ENCUT}=
-\operatorname{ceil}_{5\,\mathrm{eV}}
-\left(f_{\mathrm{ENCUT}} \max_i \mathrm{ENMAX}_i\right).
+\mathrm{ENCUT}=5\,\mathrm{eV}\,
+\left\lceil
+\frac{f_{\mathrm{ENCUT}}\,\max_i \mathrm{ENMAX}_i}{5\,\mathrm{eV}}
+\right\rceil.
 $$
+
+Here, $f_{\mathrm{ENCUT}}$ is `ENCUT_FACTOR`, and the ceiling brackets mean
+rounding upward to the nearest integer after dividing by 5 eV.
 
 An explicit `ENCUT` in `workflow.conf` bypasses this calculation. An existing
 root `POTCAR` is reused; `prepare --force` does not regenerate it.
