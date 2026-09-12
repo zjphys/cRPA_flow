@@ -28,6 +28,20 @@ Direct
 """
 
 
+def wanproj_text(spins=1, nkpoints=1, nbands=80, nw=10):
+    """Synthetic complete text fixture, not a scientific transformation."""
+    lines = ["# synthetic WANPROJ", f"{spins} {nkpoints} {nbands} {nw}"]
+    for k in range(nkpoints):
+        lines.append(f"{k+1} {k/nkpoints} 0 0")
+    for spin in range(1, spins+1):
+        for k in range(nkpoints):
+            lines.append(f"{spin} {nw} {k/nkpoints} 0 0")
+            for band in range(1, nw+1):
+                for orbital in range(1, nw+1):
+                    lines.append(f"{band} {orbital} {int(band == orbital)}D+00 0")
+    return "\n".join(lines) + "\n"
+
+
 class PrepareCrpaTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -61,7 +75,7 @@ General timing and accounting informations for this job:
             if name == "POSCAR":
                 continue
             content = (
-                "# ISPIN NKPTS NB_TOT NW\n1 1 80 10\n"
+                wanproj_text()
                 if name == "WANPROJ"
                 else f"{name} restart data\n"
             )
@@ -212,7 +226,7 @@ General timing and accounting informations for this job:
         with (self.wannier / "INCAR").open("a", encoding="utf-8") as handle:
             handle.write("ISPIN = 2\n")
         (self.wannier / "WANPROJ").write_text(
-            "# ISPIN NKPTS NB_TOT NW\n2 1 80 10\n", encoding="utf-8"
+            wanproj_text(spins=2), encoding="utf-8"
         )
 
         stage, settings = preparer.prepare_crpa(
@@ -251,7 +265,7 @@ General timing and accounting informations for this job:
         with (self.wannier / "INCAR").open("a", encoding="utf-8") as handle:
             handle.write("ISPIN = 2\n")
         (self.wannier / "WANPROJ").write_text(
-            "# ISPIN NKPTS NB_TOT NW\n2 1 80 10\n", encoding="utf-8"
+            wanproj_text(spins=2), encoding="utf-8"
         )
         for template in (
             "ALGO = CRPA\nNTARGET_STATES = {{TARGET_STATES}}\n",
@@ -261,6 +275,35 @@ General timing and accounting informations for this job:
                 preparer.CrpaPreparationError, "must preserve ISPIN"
             ):
                 preparer.prepare_crpa(self.root, [1], template=template)
+
+    def test_validates_complete_wanproj_payload(self):
+        valid = wanproj_text(nkpoints=2)
+        bad = [
+            ("# header\n1 1 1 10\n", "NW cannot exceed"),
+            ("# header\n1 1 79 10\n", "effective NBANDS"),
+            ("# header\n1 1 80 10\n", "truncated"),
+            (valid.rsplit("\n", 2)[0] + "\n", "truncated"),
+            (valid.replace("1 1 1D+00 0", "1 1 nan 0", 1), "nonfinite"),
+            (valid.replace("1 2 0D+00 0", "1 1 0D+00 0", 1), "duplicate matrix"),
+            (valid.replace("1 2 0D+00 0", "81 2 0D+00 0", 1), "outside dimensions"),
+            (valid.replace("1 10 0.5 0 0", "1 10 0.0 0 0"), "duplicate block"),
+            (valid.replace("1 10 0.5 0 0", "1 10 0.9 0 0"), "unmatched"),
+            (valid + "extra\n", "trailing"),
+        ]
+        for payload, message in bad:
+            with self.subTest(message=message):
+                (self.wannier / "WANPROJ").write_text(payload)
+                with self.assertRaisesRegex(preparer.CrpaPreparationError, message):
+                    preparer.prepare_crpa(self.root)
+                self.assertFalse((self.root / "05_crpa").exists())
+        (self.wannier / "WANPROJ").write_text(valid)
+        with (self.wannier / "OUTCAR").open("a") as handle:
+            handle.write("NKPTS = 1\n")
+        with self.assertRaisesRegex(preparer.CrpaPreparationError, "NKPTS"):
+            preparer.prepare_crpa(self.root)
+        with (self.wannier / "OUTCAR").open("a") as handle:
+            handle.write("NKPTS = 2\n")
+        preparer.prepare_crpa(self.root)
 
     def test_refuses_unowned_stage(self) -> None:
         stage = self.root / "05_crpa"

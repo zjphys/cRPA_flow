@@ -36,7 +36,7 @@ chmod +x "$test_root/mockbin/vaspkit" "$test_root/mockbin/sbatch"
 export PATH="$test_root/mockbin:$PATH"
 export SUBMISSION_LOG="$test_root/submissions"
 cd "$test_root"
-"$workflow" --version | grep -Fx 'crpa-workflow 1.4.1'
+"$workflow" --version | grep -Fx 'crpa-workflow 1.0.0'
 test -x "$(dirname "$workflow")/crpa-workflow-batch"
 "$(dirname "$workflow")/crpa-workflow-batch" --help
 "$workflow" --help
@@ -59,6 +59,9 @@ fi
 if "$workflow" init . --poscar ../structures/nested/POSCAR; then
   printf 'Initialization should not overwrite a case.\n' >&2; exit 1
 fi
+for command in init doctor batch prepare run submit execute status postprocess rank-bands prepare-wannier run-wannier submit-wannier prepare-crpa run-crpa submit-crpa; do
+  "$workflow" "$command" --help > /dev/null
+done
 "$workflow" postprocess --help
 "$workflow" rank-bands --help
 "$workflow" prepare-wannier --help

@@ -6,7 +6,7 @@ registration jurisdiction and institution-specific requirements before final exp
 
 ## Proposed software identity
 
-Working name: crpa-workflow. Candidate technical version: 1.4.1.
+Working name: crpa-workflow. Candidate technical version: 1.0.0.
 The final Chinese/English registration name, copyright holder(s), authors,
 development/completion dates and registration version remain to be confirmed.
 Do not infer ownership from the developer names or select an open-source license
@@ -67,3 +67,30 @@ Outstanding applicant inputs:
 Keep the software name/version consistent across application, source listing,
 manual and captured outputs. Source and manual export should follow the approved
 release; changing scientific behavior afterwards requires renewed verification.
+
+## Rebuilding the preparation packet
+
+Confirmed registration facts belong in `docs/registration_details.json`. Null or
+false entries remain visibly pending; the builder does not infer ownership or
+signature status. See `docs/component_provenance.md` for the evidence inventory.
+
+Use a separate developer Python 3.11+ environment with
+`python -m pip install -r tools/requirements-registration.txt`. This is separate
+from the Linux workflow's Python 3.10+ runtime. The default PDF fonts are Windows
+SimSun, SimHei and Consolas. On another OS, set `REGISTRATION_CN_FONT`,
+`REGISTRATION_BOLD_FONT` and `REGISTRATION_CODE_FONT` to licensed local font files
+with the required Chinese/code glyphs, and visually recheck all output pages.
+
+Run `python tools/build_registration_materials.py`, then
+`python tools/verify_registration_materials.py --build-zip`. The second command
+validates all four required PDFs, exact source body text, document text, geometry,
+source/input snapshots and release identity before building the ZIP. Inspect the
+rendered pages in `artifacts/copyright_application_qa`. Subsequent checks use
+`python tools/verify_registration_materials.py --no-render` without changing the
+packet. The ZIP hash receipt is stored beside the ZIP; each file has an internal
+hash record. Actual source, manuals, tooling, tests and Git working-tree state are
+recorded because a HEAD revision alone does not identify an uncommitted snapshot.
+
+These technical checks do not certify ownership or replace applicant confirmation,
+actual signatures, the official application form or the filing system's current
+requirements. A real scientific run remains outside this mock-tested release.

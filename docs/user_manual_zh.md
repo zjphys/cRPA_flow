@@ -1,6 +1,6 @@
 # crpa-workflow 用户手册（中文版）
 
-**软件版本：** 1.4.1（候选版本）\
+**软件版本：** 1.0.0（候选版本）\
 **文档状态：** 待审阅草稿\
 **编写日期：** 2026年9月11日\
 **适用对象：** 在 Linux 工作站或高性能计算集群上开展 VASP 计算的科研人员\
@@ -92,12 +92,12 @@ flowchart LR
 解压完整源码发布包，在包含 `install.sh` 的目录中执行：
 
 ```bash
-bash install.sh "$HOME/.local/share/crpa-workflow/1.4.1"
-source "$HOME/.local/share/crpa-workflow/1.4.1/bin/activate"
+bash install.sh "$HOME/.local/share/crpa-workflow/1.0.0"
+source "$HOME/.local/share/crpa-workflow/1.0.0/bin/activate"
 crpa-workflow --version
 ```
 
-正常情况下，最后一条命令显示 `crpa-workflow 1.4.1`。安装脚本将软件及绘图依赖安装到指定的 Python 虚拟环境，不需要管理员权限，也不会自动修改 Shell 启动文件。
+正常情况下，最后一条命令显示 `crpa-workflow 1.0.0`。安装脚本将软件及绘图依赖安装到指定的 Python 虚拟环境，不需要管理员权限，也不会自动修改 Shell 启动文件。
 
 如果目标目录已存在，安装脚本会拒绝覆盖。升级时建议指定新的安装目录，并保留旧环境，以便已生成的批量计算启动脚本继续使用原有环境。每次打开新终端后，应重新激活环境，或使用安装目录下命令的绝对路径。
 
@@ -135,7 +135,7 @@ python -m pip wheel '.[plot]' 'setuptools>=68' -w wheelhouse
 
 ```bash
 python -m pip install --no-index --find-links wheelhouse \
-  'crpa-workflow[plot]==1.4.1'
+  'crpa-workflow[plot]==1.0.0'
 ```
 
 如果集群 Python 缺少安装所需组件，应先选择集群提供的适当 Python 环境。更多说明见[安装指南（英文）](installation.md)。
@@ -521,6 +521,16 @@ crpa-workflow --config /path/to/workflow.conf batch \
 当前候选版本已通过记录在案的 Python 测试、模拟外部程序的 Bash 工作流测试、安装检查及合成数据绘图检查。这些测试没有运行真实 VASP/Wannier/cRPA 生产计算。
 
 随软件提供的硅 POSCAR 用于输入演示；绘图测试数据属于合成测试数据，不应作为真实材料计算结果引用。具体测试环境与范围见[验证记录（英文）](validation.md)，计算原理见[物理说明（英文）](physics_reference.md)。
+
+### 执行与恢复规则（2026年9月12日修复）
+
+生成的作业应在阶段目录中提交：`cd STAGE && sbatch job.sh`。Slurm 暂存脚本通过 `SLURM_SUBMIT_DIR` 定位阶段，并检查工作流标记；直接用 Bash 执行时按脚本所在目录定位。升级软件后须重新生成已有 job.sh，旧脚本不会自动更新。
+
+运行命令的 `--help` 只显示帮助，不启动计算；未知参数报错。环境初始化与运行命令在子 Shell 中使用 `set -euo pipefail`；初始化、普通命令或管道失败会中止后续命令。自定义脚本若显式处理或忽略错误，仍需自行保证返回状态正确。
+
+后处理使用配置中的 `VASPKIT_BIN`，命令行 `--vaspkit` 优先。Wannier 强制替换失败时恢复旧阶段；若文件系统同时阻止恢复，旧数据保留在准备临时目录的 `previous-04_wann` 中，恢复前不要删除。成功强制替换仍会移除旧 Wannier 输出。
+
+cRPA 准备支持 VASP 文档所述的文本 WANPROJ，不读取 HDF5 表示。程序核对维度、有效 NBANDS、OUTCAR 中存在的 NKPTS、k 点表、全部自旋/k 点块、矩阵索引覆盖和有限数值；不据此证明矩阵正交性、输入物理兼容性或计算收敛。格式依据：https://vasp.at/wiki/WANPROJ 。
 
 ## 12. 软著材料完善说明
 

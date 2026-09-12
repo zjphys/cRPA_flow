@@ -1,4 +1,4 @@
-# SCF-to-cRPA physics reference — 1.4.1
+# SCF-to-cRPA physics reference — 1.0.0
 
 ## 1. Physical objective
 
@@ -518,8 +518,8 @@ frequency-dependent.
 
 The supplied `INCAR_CRPA_TEMPLATE` sets `ALGO=CRPA` and does not set `LSCRPA`;
 therefore it uses VASP's default projector-cRPA path. Current VASP 6.6
-documentation recommends spectral cRPA for new calculations. The active
-`SBATCH_TEMPLATE`, however, sources an environment named `vasp651_env.sh`.
+documentation recommends spectral cRPA for new calculations. The portable `SBATCH_TEMPLATE` does not select a VASP build. The archived
+site configuration referenced `vasp651_env.sh`; it is not the active default.
 Do not add VASP 6.6-only guidance to a VASP 6.5.1 job without checking
 compatibility and reproducing validation.
 

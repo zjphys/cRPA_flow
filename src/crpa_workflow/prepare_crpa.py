@@ -141,8 +141,9 @@ def read_wanproj_header(path: Path) -> tuple[int, int, int, int]:
     """Read and validate WANPROJ's ISPIN, NKPTS, NB_TOT, and NW fields."""
 
     require_file(path, "Wannier restart/input WANPROJ")
-    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    if len(lines) < 2:
+    with path.open(encoding="utf-8") as handle:
+        lines = [handle.readline(), handle.readline()]
+    if not lines[1]:
         raise CrpaPreparationError(f"WANPROJ header is incomplete: {path}")
     fields = lines[1].split()
     if len(fields) != 4:
@@ -163,7 +164,78 @@ def read_wanproj_header(path: Path) -> tuple[int, int, int, int]:
         raise CrpaPreparationError(
             f"WANPROJ header in {path} contains non-positive dimensions"
         )
+    if num_wann > nbands:
+        raise CrpaPreparationError("WANPROJ NW cannot exceed NB_TOT")
     return ispin, nkpoints, nbands, num_wann
+
+
+def validate_wanproj(path: Path, dimensions: tuple[int, int, int, int]) -> None:
+    """Validate the documented plain-text format, not HDF5 or matrix physics.
+
+    See https://vasp.at/wiki/WANPROJ. Stream matrix rows to avoid retaining
+    the entire file; every spin/k-point block must cover its band/orbital pairs.
+    """
+    ispin, nkpoints, nbands, num_wann = dimensions
+    with path.open(encoding="utf-8") as handle:
+        handle.readline()
+        handle.readline()
+
+        def row(size: int) -> list[str]:
+            fields = handle.readline().split()
+            if len(fields) != size:
+                raise CrpaPreparationError(
+                    f"WANPROJ truncated or malformed row; expected {size} fields"
+                )
+            return fields
+
+        def real(value: str) -> float:
+            result = float(value.replace("D", "E").replace("d", "e"))
+            if not math.isfinite(result):
+                raise ValueError("nonfinite number")
+            return result
+
+        try:
+            kpoints = {}
+            for _ in range(nkpoints):
+                fields = row(4)
+                index = int(fields[0])
+                if index not in range(1, nkpoints + 1) or index in kpoints:
+                    raise ValueError("invalid or duplicate k-point index")
+                kpoints[index] = tuple(real(x) for x in fields[1:])
+            seen = set()
+            for _ in range(ispin * nkpoints):
+                fields = row(5)
+                spin, count = map(int, fields[:2])
+                coords = tuple(real(x) for x in fields[2:])
+                matches = [i for i, point in kpoints.items() if all(
+                    math.isclose(a, b, rel_tol=0, abs_tol=1e-6)
+                    for a, b in zip(point, coords)
+                )]
+                if spin not in range(1, ispin + 1) or len(matches) != 1:
+                    raise ValueError("invalid spin or unmatched/ambiguous k-point")
+                key = spin, matches[0]
+                if key in seen or not num_wann <= count <= nbands:
+                    raise ValueError("duplicate block or invalid participating-band count")
+                seen.add(key)
+                pairs, bands = set(), set()
+                for _ in range(count * num_wann):
+                    fields = row(4)
+                    band, orbital = map(int, fields[:2])
+                    real(fields[2])
+                    real(fields[3])
+                    if not 1 <= band <= nbands or not 1 <= orbital <= num_wann:
+                        raise ValueError("matrix index outside dimensions")
+                    pair = band, orbital
+                    if pair in pairs:
+                        raise ValueError("duplicate matrix element")
+                    pairs.add(pair)
+                    bands.add(band)
+                if len(bands) != count:
+                    raise ValueError("incomplete band/orbital matrix coverage")
+            if any(line.strip() for line in handle):
+                raise ValueError("unexpected trailing data")
+        except ValueError as exc:
+            raise CrpaPreparationError(f"WANPROJ invalid text data: {exc}") from exc
 
 
 def read_positive_int_assignment(text: str, tag: str) -> int:
@@ -343,9 +415,10 @@ def prepare_crpa(
     incar_text = incar_path.read_text(encoding="utf-8", errors="replace")
     num_wann = read_positive_int_assignment(incar_text, "NUM_WANN")
     ispin = read_effective_ispin(incar_text, "04_wann/INCAR")
-    wanproj_ispin, _, _, wanproj_num_wann = read_wanproj_header(
+    dimensions = read_wanproj_header(
         wannier / "WANPROJ"
     )
+    wanproj_ispin, wanproj_nkpoints, wanproj_nbands, wanproj_num_wann = dimensions
     if wanproj_ispin != ispin:
         raise CrpaPreparationError(
             f"04_wann/INCAR ISPIN ({ispin}) does not match WANPROJ ISPIN "
@@ -356,6 +429,14 @@ def prepare_crpa(
             f"04_wann/INCAR NUM_WANN ({num_wann}) does not match WANPROJ NW "
             f"({wanproj_num_wann})"
         )
+    if wanproj_nbands != nbands:
+        raise CrpaPreparationError(
+            f"WANPROJ NB_TOT ({wanproj_nbands}) does not match effective NBANDS ({nbands})"
+        )
+    outcar_nkpoints = re.findall(r"\bNKPTS\s*=\s*(\d+)", outcar.read_text(encoding="utf-8", errors="replace"))
+    if outcar_nkpoints and int(outcar_nkpoints[-1]) != wanproj_nkpoints:
+        raise CrpaPreparationError("WANPROJ NKPTS does not match completed OUTCAR NKPTS")
+    validate_wanproj(wannier / "WANPROJ", dimensions)
     encut = read_positive_float_assignment(incar_text, "ENCUT")
     ediff = read_positive_float_assignment(incar_text, "EDIFF")
     targets = (

@@ -163,6 +163,59 @@ test ! -e "$NO_RELAX_DIR/00_relax"
 )
 grep -Fx "$NO_RELAX_DIR/01_scf" "$NO_RELAX_DIR/01_scf/executed"
 
+# Slurm executes a spool copy, with submission from the stage directory.
+mkdir -p "$TEST_DIR/spool"
+cp "$NO_RELAX_DIR/01_scf/job.sh" "$TEST_DIR/spool/slurm_script"
+(cd "$TEST_DIR" && SLURM_JOB_ID=42 SLURM_SUBMIT_DIR="$NO_RELAX_DIR/01_scf" bash "$TEST_DIR/spool/slurm_script")
+grep -Fx "$NO_RELAX_DIR/01_scf" "$NO_RELAX_DIR/01_scf/executed"
+if SLURM_JOB_ID=42 SLURM_SUBMIT_DIR="$TEST_DIR/spool" bash "$TEST_DIR/spool/slurm_script"; then
+  echo 'Unowned Slurm directory unexpectedly accepted' >&2; exit 1
+fi
+
+# Help and extra arguments must never invoke a simulation or submission.
+cat >> "$NO_RELAX_DIR/workflow.conf" <<'EOF'
+STAGE_COMMANDS[default]='touch should-not-run'
+EOF
+for command in doctor prepare run submit execute status run-wannier submit-wannier run-crpa submit-crpa; do
+  (cd "$NO_RELAX_DIR" && ./workflow.sh "$command" --help >/dev/null)
+  if (cd "$NO_RELAX_DIR" && ./workflow.sh "$command" --unknown >/dev/null 2>&1); then
+    echo "Unknown argument accepted: $command" >&2; exit 1
+  fi
+done
+test -z "$(find "$NO_RELAX_DIR" -name should-not-run -print)"
+
+# Setup failures and failed pipelines stop both direct and generated jobs.
+for failure in setup pipeline command; do
+  case "$failure" in
+    setup) printf "\nEXECUTION_SETUP='false'\nSTAGE_COMMANDS[default]='touch should-not-run'\n" >> "$NO_RELAX_DIR/workflow.conf" ;;
+    pipeline) printf "\nEXECUTION_SETUP=''\nSTAGE_COMMANDS[default]='false | cat; touch should-not-run'\n" >> "$NO_RELAX_DIR/workflow.conf" ;;
+    command) printf "\nSTAGE_COMMANDS[default]='false; touch should-not-run'\n" >> "$NO_RELAX_DIR/workflow.conf" ;;
+  esac
+  (cd "$NO_RELAX_DIR" && ./workflow.sh prepare --force --no-relax >/dev/null)
+  if (cd "$NO_RELAX_DIR" && ./workflow.sh execute 01_scf); then
+    echo "Direct execution ignored $failure failure" >&2; exit 1
+  fi
+  if bash "$NO_RELAX_DIR/01_scf/job.sh"; then
+    echo "Generated job ignored $failure failure" >&2; exit 1
+  fi
+  test ! -e "$NO_RELAX_DIR/01_scf/should-not-run"
+done
+
+# Configuration is explicitly forwarded; an explicit CLI override wins.
+cat > "$NO_RELAX_DIR/postprocess.py" <<'PY'
+import argparse
+from pathlib import Path
+p = argparse.ArgumentParser()
+p.add_argument('--root')
+p.add_argument('--vaspkit')
+a = p.parse_args()
+Path(a.root, 'selected-vaspkit').write_text(a.vaspkit)
+PY
+(cd "$NO_RELAX_DIR" && ./workflow.sh postprocess)
+grep -Fx "$TEST_DIR/mockbin/vaspkit" "$NO_RELAX_DIR/selected-vaspkit"
+(cd "$NO_RELAX_DIR" && ./workflow.sh postprocess --vaspkit /explicit/vaspkit)
+grep -Fx /explicit/vaspkit "$NO_RELAX_DIR/selected-vaspkit"
+
 printf '\nSTAGE_COMMANDS[default]="exit 99"\n' >> "$CASE_DIR/workflow.conf"
 mv "$CASE_DIR/workflow.sh" "$CASE_DIR/workflow.sh.saved"
 mv "$CASE_DIR/workflow.conf" "$CASE_DIR/workflow.conf.saved"

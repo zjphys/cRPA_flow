@@ -1,6 +1,6 @@
 # crpa-workflow
 
-Version **1.4.1 — candidate release**. Linux command-line software for preparing,
+Version **1.0.0 — candidate release**. Linux command-line software for preparing,
 running and analyzing VASP relaxation, SCF, DOS, bands, Wannier and cRPA workflows.
 
 The main command is `crpa-workflow`; the batch alias is `crpa-workflow-batch`.
@@ -14,8 +14,8 @@ VASP/VASPKIT. Slurm is optional for direct execution. The installer includes the
 NumPy/Matplotlib plotting dependencies.
 
 ```bash
-bash install.sh "$HOME/.local/share/crpa-workflow/1.4.1"
-source "$HOME/.local/share/crpa-workflow/1.4.1/bin/activate"
+bash install.sh "$HOME/.local/share/crpa-workflow/1.0.0"
+source "$HOME/.local/share/crpa-workflow/1.0.0/bin/activate"
 crpa-workflow --version
 ```
 

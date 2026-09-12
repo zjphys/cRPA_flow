@@ -1,4 +1,4 @@
-# Installation and first use — 1.4.1
+# Installation and first use — 1.0.0
 
 ## Supported environment
 
@@ -21,8 +21,8 @@ pip with `--python` support for the convenience installer.
 Extract the complete source release. From its directory:
 
 ```bash
-bash install.sh "$HOME/.local/share/crpa-workflow/1.4.1"
-source "$HOME/.local/share/crpa-workflow/1.4.1/bin/activate"
+bash install.sh "$HOME/.local/share/crpa-workflow/1.0.0"
+source "$HOME/.local/share/crpa-workflow/1.0.0/bin/activate"
 crpa-workflow --version
 ```
 
@@ -51,7 +51,7 @@ python -m pip wheel '.[plot]' 'setuptools>=68' -w wheelhouse
 Transfer `wheelhouse` to the cluster. In a Python environment that already has pip:
 
 ```bash
-python -m pip install --no-index --find-links wheelhouse 'crpa-workflow[plot]==1.4.1'
+python -m pip install --no-index --find-links wheelhouse 'crpa-workflow[plot]==1.0.0'
 ```
 
 For source installation with `install.sh`, the matching wheelhouse can instead be

@@ -1,6 +1,14 @@
 # Changelog
 
-## 1.4.1 — packaging and documentation draft
+## 1.0.0 — initial release candidate
+
+- Fix Slurm spool-copy stage discovery and non-executing command help.
+- Stop on child-shell setup, command and pipeline failures.
+- Restore existing Wannier results if forced installation fails.
+- Honor configured postprocessing VASPKIT with CLI override precedence.
+- Validate complete text WANPROJ dimensions and transformation blocks.
+- Regenerate registration drafts from release metadata with pending ownership
+  facts and verifiable source, input, PDF and ZIP snapshots.
 
 - Rename the command to `crpa-workflow`, the batch alias to `crpa-workflow-batch`,
   the Python package to `crpa_workflow`, and the distribution to `crpa-workflow`.

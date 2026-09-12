@@ -1,6 +1,108 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+usage() {
+  cat <<'EOF'
+Usage:
+  crpa-workflow [--root DIR] [--config FILE] COMMAND [ARGS]
+  crpa-workflow init DIR --poscar FILE --profile local|slurm
+  crpa-workflow doctor prepare|plot|submit|run
+  crpa-workflow prepare [--force] [--no-relax]
+                                      Generate all inputs from POSCAR
+  crpa-workflow run                Run stages sequentially in this shell
+  crpa-workflow submit [--job-name PREFIX]
+                                    Submit an afterok-linked Slurm pipeline
+  crpa-workflow execute STAGE      Run one prepared stage directly
+  crpa-workflow status             Show prepared/output state
+  crpa-workflow postprocess [ARGS] Plot element- or orbital-projected bands and DOS
+  crpa-workflow prepare-wannier --elements E... --orbitals O... [--num-bands N]
+                                    Generate 04_wann after DOS/bands finish
+  crpa-workflow run-wannier        Run only the prepared 04_wann stage
+  crpa-workflow submit-wannier [--job-name PREFIX]
+                                    Submit only the prepared 04_wann stage
+  crpa-workflow prepare-crpa [--target-states I...]
+                                    Generate 05_crpa after 04_wann finishes
+  crpa-workflow run-crpa           Run only the prepared 05_crpa stage
+  crpa-workflow submit-crpa [--job-name PREFIX]
+                                    Submit only the prepared 05_crpa stage
+
+Only POSCAR is required as user-supplied scientific input. VASPKIT must be
+configured with a licensed pseudopotential library to generate POTCAR. It also
+generates Gamma-centered relaxation/SCF/DOS meshes and the symmetry-aware band
+path. Use crpa-workflow init to create a new case configuration, or edit
+workflow.conf when site or calculation defaults need changing.
+That file can also replace each complete INCAR template, the Slurm header,
+shared runtime setup, and individual stage commands.
+
+Use --no-relax when POSCAR is already the structure that should be used for
+SCF, DOS, and band calculations.
+
+Each generated stage/job.sh is self-contained. It may be submitted separately
+with "cd STAGE && sbatch job.sh" after any required predecessor outputs exist.
+Regenerate jobs after changing runtime commands, setup, resources, or headers.
+
+Submission commands accept "--job-name PREFIX" or "--job-name=PREFIX". The
+stage name is appended automatically, for example "--job-name Pu" submits
+Pu-relax, Pu-scf, Pu-dos, and Pu-band.
+
+After the DOS and band stages finish, run "crpa-workflow postprocess". VASPKIT
+tasks 213 and 113 generate element-projected band and DOS data. Plot
+options such as "--emin -3 --emax 4 --title Material" are forwarded to
+postprocess.py. Python, NumPy, Matplotlib, and VASPKIT are required.
+Use "--orbital-element Am --orbitals s p d f" for aggregate shell projections,
+or select components such as "--orbital-element Ni --orbitals dz2 dx2-y2".
+The DOS panel always includes the selected element total(s).
+
+To prepare a Wannier calculation after SCF and DOS finish (after inspecting the
+optional band stage when available), use for example:
+  crpa-workflow prepare-wannier --elements Mn Sb --orbitals d p
+Elements and orbitals are paired by position. NUM_WANN defaults to the sum of
+the matching POSCAR atom counts times shell multiplicities (s=1, p=3, d=5,
+f=7); --num-bands N overrides it. The command accepts --kpr VALUE
+(default KPR_WANN, 0.04), --frozen-margin EV (default 0.1), and --force.
+--window-method adaptive (default) uses paired SCF PROCAR weights and the last
+finite SCF OUTCAR E-fermi. --search-energy-range MIN MAX defaults to -20 20 eV
+relative to E_F, with finite MIN < MAX. Neither window must contain E_F; the
+inner is selected inside the outer. --outer-coverage FRACTION (0.8) selects equal-tail local percentiles
+(10%-90% by default) separately for every pair/k-point/spin. Their combined
+span is rounded outward and expanded as needed for NUM_WANN counts.
+--frozen-character-min FRACTION (0.70) controls frozen PAW character.
+There is no separate target energy range.
+No acceptable frozen interval produces an explicitly reported outer-only input.
+--window-method legacy retains the old ranking and window formulas. Both modes
+check outer state counts on SCF/DOS meshes and write
+04_wann/wannier_window_diagnostics.json. The generated Wannier mesh and
+interpolation accuracy remain unverified. A missing SCF PROCAR is an error.
+
+After 04_wann finishes successfully, prepare cRPA. By default all Wannier
+states from 1 through NUM_WANN are excluded from screening:
+  crpa-workflow prepare-crpa
+Use --target-states to select a subset, for example:
+  crpa-workflow prepare-crpa --target-states 1-5 8 10-12
+Inclusive ranges and individual indices can be mixed, for example 1-5 8 10-12.
+The command accepts --nbandsgw N, --encutgw EV, and --force. By default it
+uses the completed Wannier NBANDS for NBANDSGW and two-thirds of ENCUT for
+ENCUTGW. It copies the required Wannier restart inputs into 05_crpa.
+EOF
+}
+
+# Validate shell-only command syntax before sourcing case configuration.
+case "${1:-}" in
+  doctor|prepare|run|submit|execute|status|run-wannier|submit-wannier|run-crpa|submit-crpa|-h|--help|help|"")
+    for argument in "$@"; do
+      if [[ "$argument" == --help || "$argument" == -h || "$argument" == help ]]; then
+        usage
+        exit 0
+      fi
+    done
+    case "${1:-}" in
+      run|run-wannier|run-crpa|status) (( $# == 1 )) || { printf 'ERROR: %s takes no arguments\n' "$1" >&2; exit 1; } ;;
+      execute) (( $# == 2 )) && [[ "$2" =~ ^(00_relax|01_scf|02_dos|03_band|04_wann|05_crpa)$ ]] || { printf 'ERROR: execute requires exactly one valid stage\n' >&2; exit 1; } ;;
+      doctor) (( $# <= 2 )) || { printf 'ERROR: doctor accepts at most one mode\n' >&2; exit 1; } ;;
+    esac
+    ;;
+esac
+
 # POSCAR-first VASP workflow: relax -> SCF -> DOS/bands, then optional Wannier/cRPA.
 # Optional site-specific values can be placed in workflow.conf.
 
@@ -174,90 +276,6 @@ die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 info() { printf '==> %s\n' "$*"; }
 warn() { printf 'WARNING: %s\n' "$*" >&2; }
 
-usage() {
-  cat <<'EOF'
-Usage:
-  crpa-workflow [--root DIR] [--config FILE] COMMAND [ARGS]
-  crpa-workflow init DIR --poscar FILE --profile local|slurm
-  crpa-workflow doctor prepare|plot|submit|run
-  crpa-workflow prepare [--force] [--no-relax]
-                                      Generate all inputs from POSCAR
-  crpa-workflow run                Run stages sequentially in this shell
-  crpa-workflow submit [--job-name PREFIX]
-                                    Submit an afterok-linked Slurm pipeline
-  crpa-workflow execute STAGE      Run one prepared stage directly
-  crpa-workflow status             Show prepared/output state
-  crpa-workflow postprocess [ARGS] Plot element- or orbital-projected bands and DOS
-  crpa-workflow prepare-wannier --elements E... --orbitals O... [--num-bands N]
-                                    Generate 04_wann after DOS/bands finish
-  crpa-workflow run-wannier        Run only the prepared 04_wann stage
-  crpa-workflow submit-wannier [--job-name PREFIX]
-                                    Submit only the prepared 04_wann stage
-  crpa-workflow prepare-crpa [--target-states I...]
-                                    Generate 05_crpa after 04_wann finishes
-  crpa-workflow run-crpa           Run only the prepared 05_crpa stage
-  crpa-workflow submit-crpa [--job-name PREFIX]
-                                    Submit only the prepared 05_crpa stage
-
-Only POSCAR is required as user-supplied scientific input. VASPKIT must be
-configured with a licensed pseudopotential library to generate POTCAR. It also
-generates Gamma-centered relaxation/SCF/DOS meshes and the symmetry-aware band
-path. Use crpa-workflow init to create a new case configuration, or edit
-workflow.conf when site or calculation defaults need changing.
-That file can also replace each complete INCAR template, the Slurm header,
-shared runtime setup, and individual stage commands.
-
-Use --no-relax when POSCAR is already the structure that should be used for
-SCF, DOS, and band calculations.
-
-Each generated stage/job.sh is self-contained. It may be submitted separately
-with "cd STAGE && sbatch job.sh" after any required predecessor outputs exist.
-Regenerate jobs after changing runtime commands, setup, resources, or headers.
-
-Submission commands accept "--job-name PREFIX" or "--job-name=PREFIX". The
-stage name is appended automatically, for example "--job-name Pu" submits
-Pu-relax, Pu-scf, Pu-dos, and Pu-band.
-
-After the DOS and band stages finish, run "crpa-workflow postprocess". VASPKIT
-tasks 213 and 113 generate element-projected band and DOS data. Plot
-options such as "--emin -3 --emax 4 --title Material" are forwarded to
-postprocess.py. Python, NumPy, Matplotlib, and VASPKIT are required.
-Use "--orbital-element Am --orbitals s p d f" for aggregate shell projections,
-or select components such as "--orbital-element Ni --orbitals dz2 dx2-y2".
-The DOS panel always includes the selected element total(s).
-
-To prepare a Wannier calculation after SCF and DOS finish (after inspecting the
-optional band stage when available), use for example:
-  crpa-workflow prepare-wannier --elements Mn Sb --orbitals d p
-Elements and orbitals are paired by position. NUM_WANN defaults to the sum of
-the matching POSCAR atom counts times shell multiplicities (s=1, p=3, d=5,
-f=7); --num-bands N overrides it. The command accepts --kpr VALUE
-(default KPR_WANN, 0.04), --frozen-margin EV (default 0.1), and --force.
---window-method adaptive (default) uses paired SCF PROCAR weights and the last
-finite SCF OUTCAR E-fermi. --search-energy-range MIN MAX defaults to -20 20 eV
-relative to E_F, with finite MIN < MAX. Neither window must contain E_F; the
-inner is selected inside the outer. --outer-coverage FRACTION (0.8) selects equal-tail local percentiles
-(10%-90% by default) separately for every pair/k-point/spin. Their combined
-span is rounded outward and expanded as needed for NUM_WANN counts.
---frozen-character-min FRACTION (0.70) controls frozen PAW character.
-There is no separate target energy range.
-No acceptable frozen interval produces an explicitly reported outer-only input.
---window-method legacy retains the old ranking and window formulas. Both modes
-check outer state counts on SCF/DOS meshes and write
-04_wann/wannier_window_diagnostics.json. The generated Wannier mesh and
-interpolation accuracy remain unverified. A missing SCF PROCAR is an error.
-
-After 04_wann finishes successfully, prepare cRPA. By default all Wannier
-states from 1 through NUM_WANN are excluded from screening:
-  crpa-workflow prepare-crpa
-Use --target-states to select a subset, for example:
-  crpa-workflow prepare-crpa --target-states 1-5 8 10-12
-Inclusive ranges and individual indices can be mixed, for example 1-5 8 10-12.
-The command accepts --nbandsgw N, --encutgw EV, and --force. By default it
-uses the completed Wannier NBANDS for NBANDSGW and two-thirds of ENCUT for
-ENCUTGW. It copies the required Wannier restart inputs into 05_crpa.
-EOF
-}
 
 doctor() {
   local mode="${1:-prepare}" failed=0 tool
@@ -485,7 +503,11 @@ write_job() {
     printf '\nset -euo pipefail\n'
     printf 'export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"\n'
     printf '%s\n' \
-      'job_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"' \
+      'if [[ -n "${SLURM_JOB_ID:-}" ]]; then' \
+      '  job_dir="${SLURM_SUBMIT_DIR:?Slurm submission directory is required; submit from the stage directory}"' \
+      'else' \
+      '  job_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"' \
+      'fi' \
       'job_error() { printf "ERROR: %s\\n" "$*" >&2; exit 1; }' \
       'require_input() { [[ -s "$1" ]] || job_error "required predecessor input is missing or empty: $1"; }'
     printf '[[ -f "$job_dir/%s" ]] || job_error "stage marker is missing: $job_dir/%s"\n' \
@@ -516,7 +538,7 @@ write_job() {
         ;;
     esac
     printf '%s\n' 'cd "$job_dir"'
-    printf 'exec bash -lc %q\n' "$job_command"
+    printf 'exec bash -lc %q\n' $'set -euo pipefail\n'"$job_command"
   } > "$dir/job.sh"
   chmod +x "$dir/job.sh"
 }
@@ -671,7 +693,7 @@ execute_stage() {
   if [[ -n "$EXECUTION_SETUP" ]]; then
     command="$EXECUTION_SETUP"$'\n'"$command"
   fi
-  (cd "$ROOT_DIR/$stage" && bash -lc "$command")
+  (cd "$ROOT_DIR/$stage" && bash -lc $'set -euo pipefail\n'"$command")
 }
 
 run_all() {
@@ -810,7 +832,7 @@ case "${1:-}" in
   submit) shift; submit_all "$@" ;;
   execute) execute_stage "${2:-}" ;;
   status) status ;;
-  postprocess) shift; run_python_tool postprocess --root "$ROOT_DIR" "$@" ;;
+  postprocess) shift; run_python_tool postprocess --root "$ROOT_DIR" --vaspkit "$VASPKIT_BIN" "$@" ;;
   prepare-wannier) shift; prepare_wannier_stage "$@" ;;
   run-wannier) run_wannier ;;
   submit-wannier) shift; submit_wannier "$@" ;;

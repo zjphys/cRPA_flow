@@ -1,0 +1,5 @@
+# Separate developer environment; not required by the Linux workflow runtime.
+reportlab>=4,<5
+pypdf>=5,<7
+pypdfium2>=4,<6
+Pillow>=10,<13

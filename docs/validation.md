@@ -1,4 +1,4 @@
-# Candidate validation record — 1.4.1
+# Candidate validation record — 1.0.0
 
 Validated on 2026-09-11. This record concerns source organization, packaging and
 mocked execution. No actual VASP, Wannier or cRPA calculation was run during this work.
@@ -67,3 +67,33 @@ was installed into the isolated Linux test environment; version/help, both entry
 points, initialization, mocked preparation/submission, and generated batch
 launchers passed the installed integration test. The five scientific module
 contents and legacy ZIP remain byte-identical to the preceding commit.
+
+## Review defect remediation — 2026-09-12
+
+The six reproduced defects in the review were corrected. Earlier statements
+about unchanged module contents describe the preceding restructuring snapshots;
+this remediation changes execution, recovery and restart-input validation.
+
+- 121 Python tests passed, including complete/truncated/contradictory WANPROJ
+  payloads, multiple k-points, both spin modes and failed forced Wannier install.
+- All four shell integration scripts passed in WSL, including a copied Slurm
+  spool script, unowned submission directory rejection, help/unknown options,
+  setup/command/pipeline failure propagation and postprocessing configuration.
+- A freshly built wheel was explicitly reinstalled (same-version pip skips are
+  not accepted as validation). Installed integration passed outside the checkout,
+  including help for all 16 public commands and the batch alias.
+- All four refreshed PDFs passed body-text, source-hash, version and geometry
+  checks. All 72 pages were rendered and visually reviewed. Source identification
+  contains the first and last 30 pages of a 96-page listing (12 runtime files,
+  5,329 physical lines; 4,808 nonempty lines).
+- The verifier requires the complete PDF set and compares the source PDF body,
+  input/source ZIP snapshots, every packet file and the distributable ZIP.
+
+No actual scheduler submission or VASP/Wannier/cRPA scientific calculation was
+performed. Existing generated jobs must be regenerated to use the fixed backend.
+Ownership, applicant identity, actual completion/publication dates and signatures
+remain pending in `registration_details.json`; technical checks do not make the
+preparation packet ready for filing.
+
+Evidence is in `artifacts/project_review/fix-*.log` and the refreshed packet's
+`核验记录` folder. The review report remains a record of the pre-fix findings.

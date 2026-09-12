@@ -30,7 +30,7 @@ crpa-workflow --help
 | `01_scf` | Self-consistent calculation | Relaxed `CONTCAR`, or input `POSCAR` |
 | `02_dos` | DOS calculation | Completed `01_scf/CHGCAR` |
 | `03_band` | Band structure | Completed `01_scf/CHGCAR`, generated `KPATH.in` |
-| `04_wann` | Wannier construction | Completed SCF, DOS, and band data |
+| `04_wann` | Wannier construction | Completed SCF and DOS data; band inspection optional |
 | `05_crpa` | cRPA calculation | Completed `04_wann` and selected Wannier states |
 
 `02_dos` and `03_band` are independent children of `01_scf`. Wannier and cRPA
@@ -148,8 +148,7 @@ crpa-workflow postprocess --wannier-bands --emin -3 --emax 4
 The overlay reads `04_wann/INCAR` to determine `ISPIN`. It uses
 `wannier90_band.dat` for `ISPIN=1`, or both `wannier90.1_band.dat` and
 `wannier90.2_band.dat` for `ISPIN=2`. Raw Wannier energies are shifted by the
-final `E-fermi` value in `04_wann/OUTCAR`; spin up is solid and spin down is
-dashed. Use `--reuse-data` as well when the existing PBAND/PDOS files should
+final `E-fermi` value in `04_wann/OUTCAR`; both Wannier spin channels are dashed. Use `--reuse-data` as well when the existing PBAND/PDOS files should
 not be regenerated.
 
 Other useful plotting controls are `--marker-scale`, `--vaspkit`, and repeated
@@ -318,3 +317,30 @@ crpa-workflow status
 earlier jobs; invoke them only after their prerequisite calculations finish.
 Their generated jobs may also be submitted directly with `cd 04_wann && sbatch
 job.sh` or `cd 05_crpa && sbatch job.sh`.
+
+
+### Execution and restart validation (2026-09-12)
+
+Submit generated jobs from their stage directory (`cd STAGE && sbatch job.sh`).
+Slurm jobs resolve their stage using `SLURM_SUBMIT_DIR` and require the workflow
+ownership marker; direct Bash execution resolves the script location. Regenerate
+existing job scripts after updating the package to obtain these fixes.
+
+Help for execution commands performs no calculation, and unexpected arguments
+are rejected. Runtime setup and custom commands use `set -euo pipefail` in the
+child login shell. A failed setup, simple command or pipeline stops the job;
+custom shell code that explicitly handles failures remains responsible for its
+own exit semantics. `postprocess` uses configured `VASPKIT_BIN`, with an explicit
+`--vaspkit` argument taking precedence.
+
+Failed forced Wannier installation restores the previous stage. If filesystem
+errors also prevent rollback, the previous tree remains in the preparation
+temporary directory (`previous-04_wann`) for recovery; do not remove it before
+recovering data. Successful force replacement still discards old Wannier results.
+
+cRPA preparation supports the documented whitespace-separated text WANPROJ
+format, not the HDF5 representation. It checks dimensions against INCAR/effective
+OUTCAR NBANDS (and OUTCAR NKPTS when present), the k-point table, all spin/k-point
+blocks, complete band/orbital index coverage and finite matrix entries. It does
+not prove matrix orthonormality, physical compatibility or scientific convergence.
+Format reference: https://vasp.at/wiki/WANPROJ .

@@ -11,6 +11,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 SOURCE_DIR = Path(__file__).resolve().parents[1]
@@ -453,6 +454,24 @@ header
                 self.vaspkit,
                 window_method="legacy",
             )
+
+    def test_failed_force_install_preserves_previous_results(self):
+        stage = self.root / "04_wann"
+        stage.mkdir()
+        (stage / preparer.MARKER).touch()
+        (stage / "valuable-result").write_bytes(b"original result")
+        original_replace = Path.replace
+        def fail_install(path, target):
+            if Path(target) == stage and path.name == "04_wann":
+                raise PermissionError("injected installation failure")
+            return original_replace(path, target)
+        with patch.object(Path, "replace", fail_install):
+            with self.assertRaisesRegex(PermissionError, "injected"):
+                preparer.prepare_wannier(
+                    self.root, ("Mn", "Sb"), ("d", "p"), 2, 0.06,
+                    self.vaspkit, window_method="legacy", force=True)
+        self.assertEqual((stage / "valuable-result").read_bytes(), b"original result")
+        self.assertTrue((stage / preparer.MARKER).is_file())
 
     def test_force_refuses_unowned_stage(self) -> None:
         stage = self.root / "04_wann"

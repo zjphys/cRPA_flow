@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "crpa-workflow"
-version = "1.4.1"
+version = "1.0.0"
 description = "Command-line preparation, execution and analysis of VASP SCF-to-cRPA workflows"
 readme = "README.md"
 requires-python = ">=3.10"

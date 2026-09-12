@@ -2,7 +2,7 @@
 
 [中文版用户手册](user_manual_zh.md)
 
-**Software version:** 1.4.1 (candidate)\
+**Software version:** 1.0.0 (candidate)\
 **Document status:** Draft for review, 2026-09-11\
 **Intended audience:** Researchers preparing VASP calculations on Linux systems\
 **Registration name and copyright holder:** To be confirmed by the applicant
@@ -65,8 +65,8 @@ universal requirements.
 From a complete source distribution:
 
 ```bash
-bash install.sh "$HOME/.local/share/crpa-workflow/1.4.1"
-source "$HOME/.local/share/crpa-workflow/1.4.1/bin/activate"
+bash install.sh "$HOME/.local/share/crpa-workflow/1.0.0"
+source "$HOME/.local/share/crpa-workflow/1.0.0/bin/activate"
 crpa-workflow --version
 ```
 
@@ -298,3 +298,30 @@ completed case: installation/version, configuration, preparation, submission/sta
 projected bands/DOS, Wannier diagnostics and cRPA outputs. Record the cluster,
 software/build versions and calculation settings. The applicant must confirm the
 official software name, copyright holder, completion date and registration version.
+
+
+### Execution and restart validation (2026-09-12)
+
+Submit generated jobs from their stage directory (`cd STAGE && sbatch job.sh`).
+Slurm jobs resolve their stage using `SLURM_SUBMIT_DIR` and require the workflow
+ownership marker; direct Bash execution resolves the script location. Regenerate
+existing job scripts after updating the package to obtain these fixes.
+
+Help for execution commands performs no calculation, and unexpected arguments
+are rejected. Runtime setup and custom commands use `set -euo pipefail` in the
+child login shell. A failed setup, simple command or pipeline stops the job;
+custom shell code that explicitly handles failures remains responsible for its
+own exit semantics. `postprocess` uses configured `VASPKIT_BIN`, with an explicit
+`--vaspkit` argument taking precedence.
+
+Failed forced Wannier installation restores the previous stage. If filesystem
+errors also prevent rollback, the previous tree remains in the preparation
+temporary directory (`previous-04_wann`) for recovery; do not remove it before
+recovering data. Successful force replacement still discards old Wannier results.
+
+cRPA preparation supports the documented whitespace-separated text WANPROJ
+format, not the HDF5 representation. It checks dimensions against INCAR/effective
+OUTCAR NBANDS (and OUTCAR NKPTS when present), the k-point table, all spin/k-point
+blocks, complete band/orbital index coverage and finite matrix entries. It does
+not prove matrix orthonormality, physical compatibility or scientific convergence.
+Format reference: https://vasp.at/wiki/WANPROJ .

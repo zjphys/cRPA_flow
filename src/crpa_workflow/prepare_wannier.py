@@ -800,11 +800,19 @@ def prepare_wannier(
             json.dumps(diagnostics, indent=2, allow_nan=False) + "\n", encoding="utf-8")
         (staged / MARKER).touch()
 
+        backup = temporary_root / "previous-04_wann"
         if stage.exists():
-            shutil.rmtree(stage)
-        staged.replace(stage)
+            stage.replace(backup)
+        try:
+            staged.replace(stage)
+        except Exception:
+            if backup.exists():
+                backup.replace(stage)
+            raise
     except Exception:
-        shutil.rmtree(temporary_root, ignore_errors=True)
+        # If rollback itself fails, retain the backup for manual recovery.
+        if not (temporary_root / "previous-04_wann").exists():
+            shutil.rmtree(temporary_root, ignore_errors=True)
         raise
     shutil.rmtree(temporary_root, ignore_errors=True)
     print(f"Window method: {window_method}")

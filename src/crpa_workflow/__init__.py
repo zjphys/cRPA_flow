@@ -5,4 +5,4 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("crpa-workflow")
 except PackageNotFoundError:
-    __version__ = "1.4.1"
+    __version__ = "1.0.0"

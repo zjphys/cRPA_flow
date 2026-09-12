@@ -38,10 +38,12 @@ EOF
 for name in POTCAR KPOINTS CHGCAR WAVECAR; do
   printf '%s restart data\n' "$name" > "$TEST_DIR/04_wann/$name"
 done
-cat > "$TEST_DIR/04_wann/WANPROJ" <<'EOF'
-# ISPIN NKPTS NB_TOT NW
-1 1 80 10
-EOF
+PYTHONPATH="$SOURCE_DIR/tests" python3 - "$TEST_DIR/04_wann/WANPROJ" <<'PY'
+from pathlib import Path
+from test_prepare_crpa import wanproj_text
+import sys
+Path(sys.argv[1]).write_text(wanproj_text())
+PY
 
 cat > "$TEST_DIR/mock_sbatch" <<'EOF'
 #!/usr/bin/env bash
