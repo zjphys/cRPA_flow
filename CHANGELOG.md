@@ -2,12 +2,15 @@
 
 ## 1.4.1 — packaging and documentation draft
 
-- Installable Python package with `vasp-workflow` and `vasp-workflow-batch` commands.
+- Rename the command to `crpa-workflow`, the batch alias to `crpa-workflow-batch`,
+  the Python package to `crpa_workflow`, and the distribution to `crpa-workflow`.
+
+- Installable Python package with `crpa-workflow` and `crpa-workflow-batch` commands.
 - Separate calculation directories from the installed software.
 - Add non-overwriting case initialization, local/Slurm profiles and environment checks.
 - Archive the original code, cluster configuration and retired root launchers; use the installed package commands.
 - Batch cases use a launcher and configuration instead of duplicating source code.
-- Move Python implementation and shell resources under `src/vasp_workflow`.
+- Move Python implementation and shell resources under `src/crpa_workflow`.
 - Add installation, developer and registration documentation and a silicon example.
 - Keep scientific algorithms unchanged; compare against baseline commit
   `13b6b6c1166b7417c9c748fd99207520db86adee`.

@@ -1,4 +1,4 @@
-# VASP SCF-to-cRPA Workflow 用户手册（中文版）
+# crpa-workflow 用户手册（中文版）
 
 **软件版本：** 1.4.1（候选版本）\
 **文档状态：** 待审阅草稿\
@@ -29,7 +29,7 @@
 
 ### 1.1 用途
 
-VASP SCF-to-cRPA Workflow 用于组织和管理基于 VASP 的电子结构计算流程，包括可选的结构弛豫、自洽场计算、态密度计算、能带计算、Wannier 构建，以及约束随机相位近似（cRPA）计算。
+crpa-workflow 用于组织和管理基于 VASP 的电子结构计算流程，包括可选的结构弛豫、自洽场计算、态密度计算、能带计算、Wannier 构建，以及约束随机相位近似（cRPA）计算。
 
 软件负责生成输入文件和作业脚本、安排阶段之间的数据传递、提交具有依赖关系的 Slurm 作业、查询基于输出文件的计算状态，以及进行轨道投影分析、Wannier 能量窗口选择和能带／态密度绘图。
 
@@ -92,12 +92,12 @@ flowchart LR
 解压完整源码发布包，在包含 `install.sh` 的目录中执行：
 
 ```bash
-bash install.sh "$HOME/.local/share/vasp-workflow/1.4.1"
-source "$HOME/.local/share/vasp-workflow/1.4.1/bin/activate"
-vasp-workflow --version
+bash install.sh "$HOME/.local/share/crpa-workflow/1.4.1"
+source "$HOME/.local/share/crpa-workflow/1.4.1/bin/activate"
+crpa-workflow --version
 ```
 
-正常情况下，最后一条命令显示 `vasp-workflow 1.4.1`。安装脚本将软件及绘图依赖安装到指定的 Python 虚拟环境，不需要管理员权限，也不会自动修改 Shell 启动文件。
+正常情况下，最后一条命令显示 `crpa-workflow 1.4.1`。安装脚本将软件及绘图依赖安装到指定的 Python 虚拟环境，不需要管理员权限，也不会自动修改 Shell 启动文件。
 
 如果目标目录已存在，安装脚本会拒绝覆盖。升级时建议指定新的安装目录，并保留旧环境，以便已生成的批量计算启动脚本继续使用原有环境。每次打开新终端后，应重新激活环境，或使用安装目录下命令的绝对路径。
 
@@ -117,7 +117,13 @@ python -m pip install .
 
 开发和调试时可使用 `python -m pip install -e '.[plot]'` 安装可编辑版本。普通使用者宜安装明确版本的发布包。
 
-### 2.4 离线安装
+### 2.4 命令名称迁移
+
+原命令 `vasp-workflow` 和 `vasp-workflow-batch` 已分别更名为 `crpa-workflow` 和 `crpa-workflow-batch`；Python 模块名为 `crpa_workflow`，pip 包名为 `crpa-workflow`。本版本不提供旧命令别名，已有安装不会自动改名，应将新源码安装到新环境并激活。
+
+现有计算目录和已生成的 `job.sh` 无需修改。旧批量启动脚本仍引用 `vasp_workflow`，可以保留原安装环境继续使用，或在新环境中通过 `crpa-workflow --root /path/to/case COMMAND` 管理已有计算。名称迁移本身不要求重新生成科学计算输入。旧版本 ZIP 备份保留历史名称。
+
+### 2.5 离线安装
 
 在与目标集群的 Python 版本、CPU 架构相匹配的联网 Linux 环境中，从源码目录准备 wheel 文件：
 
@@ -129,7 +135,7 @@ python -m pip wheel '.[plot]' 'setuptools>=68' -w wheelhouse
 
 ```bash
 python -m pip install --no-index --find-links wheelhouse \
-  'vasp-scf-crpa-workflow[plot]==1.4.1'
+  'crpa-workflow[plot]==1.4.1'
 ```
 
 如果集群 Python 缺少安装所需组件，应先选择集群提供的适当 Python 环境。更多说明见[安装指南（英文）](installation.md)。
@@ -141,7 +147,7 @@ python -m pip install --no-index --find-links wheelhouse \
 软件只需安装一次，不同材料分别使用独立目录：
 
 ```bash
-vasp-workflow init my-material --poscar /path/to/POSCAR --profile slurm
+crpa-workflow init my-material --poscar /path/to/POSCAR --profile slurm
 cd my-material
 ```
 
@@ -216,14 +222,14 @@ cd my-material
 以下操作从完整源码发布包目录开始，使用随包提供的硅结构 `examples/silicon/POSCAR`。该文件演示输入格式，不是已经验证的收敛基准结果。
 
 ```bash
-vasp-workflow init silicon --poscar examples/silicon/POSCAR --profile slurm
+crpa-workflow init silicon --poscar examples/silicon/POSCAR --profile slurm
 cd silicon
 # 编辑 workflow.conf，设置实际集群环境、资源和计算参数。
-vasp-workflow doctor prepare
-vasp-workflow prepare --no-relax
-vasp-workflow doctor submit
-vasp-workflow submit --job-name silicon
-vasp-workflow status
+crpa-workflow doctor prepare
+crpa-workflow prepare --no-relax
+crpa-workflow doctor submit
+crpa-workflow submit --job-name silicon
+crpa-workflow status
 ```
 
 各步骤的含义如下：
@@ -241,8 +247,8 @@ vasp-workflow status
 如果准备直接运行，应初始化为 `--profile local`，根据机器配置调整执行命令，然后执行：
 
 ```bash
-vasp-workflow prepare --no-relax
-vasp-workflow run
+crpa-workflow prepare --no-relax
+crpa-workflow run
 ```
 
 直接运行按顺序执行已准备的基础阶段并占用当前会话。应遵守所在集群对登录节点和计算节点的使用要求。
@@ -254,7 +260,7 @@ vasp-workflow run
 默认操作当前目录。选择其他计算目录或配置时，全局选项必须位于子命令之前：
 
 ```bash
-vasp-workflow --root /path/to/case --config /path/to/custom.conf prepare
+crpa-workflow --root /path/to/case --config /path/to/custom.conf prepare
 ```
 
 `--root` 表示计算目录，`--config` 表示配置文件；子命令自身的参数放在子命令之后。
@@ -304,13 +310,13 @@ sbatch job.sh
 DOS 和能带阶段完成后，可执行：
 
 ```bash
-vasp-workflow postprocess --elements Si --emin -5 --emax 5
+crpa-workflow postprocess --elements Si --emin -5 --emax 5
 ```
 
 `--emin`、`--emax` 设置绘图能量范围，单位为 eV。可以重复指定 `--format` 输出多种格式：
 
 ```bash
-vasp-workflow postprocess --elements Mn Sb --emin -4 --emax 4 \
+crpa-workflow postprocess --elements Mn Sb --emin -4 --emax 4 \
   --format png --format pdf --format svg --title "Mn-Sb"
 ```
 
@@ -321,26 +327,26 @@ vasp-workflow postprocess --elements Mn Sb --emin -4 --emax 4 \
 例如，对含 Ni 的体系选择轨道分量：
 
 ```bash
-vasp-workflow postprocess --orbital-element Ni --orbitals dz2 dx2-y2
+crpa-workflow postprocess --orbital-element Ni --orbitals dz2 dx2-y2
 ```
 
 完成 Wannier 计算并具备对应能带文件后，可用 `--wannier-bands` 叠加 Wannier 插值能带：
 
 ```bash
-vasp-workflow postprocess --elements Si --wannier-bands
+crpa-workflow postprocess --elements Si --wannier-bands
 ```
 
-应检查参考能量对齐、插值能带与原始能带的一致性。完整绘图选项可通过 `vasp-workflow postprocess --help` 查看。
+应检查参考能量对齐、插值能带与原始能带的一致性。完整绘图选项可通过 `crpa-workflow postprocess --help` 查看。
 
 ### 6.3 能带排序
 
 以下命令读取 SCF 轨道投影，并结合 DOS 阶段能量信息生成排序结果：
 
 ```bash
-vasp-workflow rank-bands --elements Mn Sb --orbitals d p --csv band_ranking.csv
+crpa-workflow rank-bands --elements Mn Sb --orbitals d p --csv band_ranking.csv
 ```
 
-该排序命令会组合选定元素及壳层的投影；它与 `prepare-wannier` 中按位置配对的元素／轨道选择规则不同。可用 `--scf-directory`、`--dos-directory` 指定数据目录，用 `--num-bands` 限制输出的高权重能带数量。详细说明见 `vasp-workflow rank-bands --help`。
+该排序命令会组合选定元素及壳层的投影；它与 `prepare-wannier` 中按位置配对的元素／轨道选择规则不同。可用 `--scf-directory`、`--dos-directory` 指定数据目录，用 `--num-bands` 限制输出的高权重能带数量。详细说明见 `crpa-workflow rank-bands --help`。
 
 ## 7. Wannier 与 cRPA 计算
 
@@ -349,7 +355,7 @@ vasp-workflow rank-bands --elements Mn Sb --orbitals d p --csv band_ranking.csv
 在 SCF、DOS 以及所需的能带计算完成并检查结果后执行：
 
 ```bash
-vasp-workflow prepare-wannier --elements Si Si --orbitals s p
+crpa-workflow prepare-wannier --elements Si Si --orbitals s p
 ```
 
 这里元素和轨道按位置配对，表示 `Si:s` 和 `Si:p`。默认 Wannier 函数数量根据相应元素原子数和壳层简并度推断，其中 `s=1`、`p=3`、`d=5`、`f=7`；可使用 `--num-bands` 覆盖默认数量。目标子空间应根据研究问题确定。
@@ -378,8 +384,8 @@ vasp-workflow prepare-wannier --elements Si Si --orbitals s p
 确认目标轨道、函数数量、窗口和输入设置后，再运行或提交：
 
 ```bash
-vasp-workflow submit-wannier --job-name silicon
-# 直接执行环境可改用 vasp-workflow run-wannier。
+crpa-workflow submit-wannier --job-name silicon
+# 直接执行环境可改用 crpa-workflow run-wannier。
 ```
 
 ### 7.2 cRPA 输入准备
@@ -387,8 +393,8 @@ vasp-workflow submit-wannier --job-name silicon
 等待 Wannier 计算完成，检查局域化及插值结果，并确认重启文件齐备后执行：
 
 ```bash
-vasp-workflow prepare-crpa --target-states 1-8
-vasp-workflow submit-crpa --job-name silicon
+crpa-workflow prepare-crpa --target-states 1-8
+crpa-workflow submit-crpa --job-name silicon
 ```
 
 `1-8` 仅用于本手册双原子 Si、s/p 子空间示例中推断出的八个 Wannier 函数。实际目标态范围应根据实际基组和物理问题选择。
@@ -421,7 +427,7 @@ structures/
 程序识别 `POSCAR*`、`*.vasp`、`*.poscar` 等文件，并为每个结构生成独立计算目录。建议先检查输入到输出的目录映射：
 
 ```bash
-vasp-workflow --config /path/to/workflow.conf batch \
+crpa-workflow --config /path/to/workflow.conf batch \
   --dry-run --mode prepare /path/to/structures /path/to/calculations
 ```
 
@@ -430,7 +436,7 @@ vasp-workflow --config /path/to/workflow.conf batch \
 确认映射和配置后，先生成输入用于审阅：
 
 ```bash
-vasp-workflow --config /path/to/workflow.conf batch \
+crpa-workflow --config /path/to/workflow.conf batch \
   --mode prepare /path/to/structures /path/to/calculations
 ```
 
@@ -440,9 +446,9 @@ vasp-workflow --config /path/to/workflow.conf batch \
 
 已有目录默认跳过。`--force` 用于刷新带有批量工作流标识的已有计算，但输入 POSCAR 已改变或没有批量所有权标识的目录仍会被跳过。批量运行会继续处理其他结构，最后输出成功、跳过和失败数量；只要有失败，命令就返回非零退出码。
 
-如果先采用 `--mode prepare`，审阅后可进入各计算目录执行 `vasp-workflow submit`。再次对相同目录执行默认批量命令会跳过已有计算；使用 `--force` 会涉及重新生成文件，不应仅为提交已有作业而盲目使用。
+如果先采用 `--mode prepare`，审阅后可进入各计算目录执行 `crpa-workflow submit`。再次对相同目录执行默认批量命令会跳过已有计算；使用 `--force` 会涉及重新生成文件，不应仅为提交已有作业而盲目使用。
 
-批量目录的启动脚本指向创建它的安装环境。应保留该环境，或激活其他明确版本后使用 `vasp-workflow --root /path/to/case status` 等命令管理已有计算。
+批量目录的启动脚本指向创建它的安装环境。应保留该环境，或激活其他明确版本后使用 `crpa-workflow --root /path/to/case status` 等命令管理已有计算。
 
 ## 9. 输入、输出与状态查询
 
@@ -468,7 +474,7 @@ vasp-workflow --config /path/to/workflow.conf batch \
 
 ### 9.2 状态含义
 
-执行 `vasp-workflow status` 后，已登记阶段可能显示：
+执行 `crpa-workflow status` 后，已登记阶段可能显示：
 
 | 状态 | 判定依据 |
 | --- | --- |
@@ -482,7 +488,7 @@ vasp-workflow --config /path/to/workflow.conf batch \
 
 | 问题 | 检查与处理方式 |
 | --- | --- |
-| 找不到 `vasp-workflow` | 激活安装环境，或使用命令的完整路径 |
+| 找不到 `crpa-workflow` | 激活安装环境，或使用命令的完整路径 |
 | 安装提示缺少 venv、ensurepip 或 pip | 选择具备相应组件的集群 Python 环境 |
 | 提示缺少 NumPy 或 Matplotlib | 在实际使用的解释器环境中安装 `plot` 依赖 |
 | 找不到 POSCAR | 检查 `--root` 和文件位置，确认结构文件非空且格式正确 |
@@ -494,11 +500,11 @@ vasp-workflow --config /path/to/workflow.conf batch \
 | Wannier 窗口选择失败 | 检查上游数据、轨道配对、能带数及诊断信息 |
 | cRPA 目标态编号不合法 | 使用实际 Wannier 基组范围内的编号 |
 | 修改配置后已有作业仍使用旧设置 | 已生成脚本保留生成时的设置；在适当时机重新生成 |
-| 批量启动脚本引用的环境已删除 | 激活所需版本，使用 `vasp-workflow --root CASE` 管理计算 |
+| 批量启动脚本引用的环境已删除 | 激活所需版本，使用 `crpa-workflow --root CASE` 管理计算 |
 
 重新生成前应保留需要的研究结果。软件没有适用于所有失败类型的自动重启或自动收敛恢复功能。应先确定 VASP 失败原因，再依据阶段特性选择合理的重启文件和参数。
 
-旧版本原始代码、集群配置及已移除的根目录文件已保存在本地 `archive/legacy-files-1.4.zip`，新源码发布包不包含该本地备份。日常使用应采用安装后的 `vasp-workflow` 命令。
+旧版本原始代码、集群配置及已移除的根目录文件已保存在本地 `archive/legacy-files-1.4.zip`，新源码发布包不包含该本地备份。日常使用应采用安装后的 `crpa-workflow` 命令。
 
 ## 11. 物理结果检查与验证范围
 

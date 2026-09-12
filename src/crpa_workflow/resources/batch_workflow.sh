@@ -20,9 +20,9 @@ warn() { printf 'WARNING: %s\n' "$*" >&2; }
 usage() {
   cat <<'EOF'
 Usage:
-  ./batch_workflow.sh [OPTIONS] STRUCTURE_DIR [CALCULATION_DIR]
+  crpa-workflow [--config FILE] batch [OPTIONS] STRUCTURE_DIR [CALCULATION_DIR]
 
-Create one calculation directory per input POSCAR, create a launcher using the installed workflow, run "workflow.sh prepare", and optionally run or submit the workflow.
+Create one calculation directory per input POSCAR, create a launcher using the installed workflow, run "crpa-workflow prepare", and optionally run or submit the workflow.
 
 Input layouts:
   STRUCTURE_DIR/POSCAR_Fe.vasp       Flat files named POSCAR*, *.vasp, or *.poscar
@@ -30,7 +30,7 @@ Input layouts:
 
 Options:
   --mode prepare|submit|run          Default: submit
-  --no-relax                         Pass --no-relax to workflow.sh prepare
+  --no-relax                         Pass --no-relax to crpa-workflow prepare
   --force                            Refresh existing batch-managed calculations
   --dry-run                          Print the discovered mapping without changes
   -h, --help                         Show this help
@@ -170,10 +170,10 @@ copy_workflow_files() {
     printf '%s\n' 'case_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"'
     printf 'export PYTHONPATH=%q\n' "${PYTHONPATH:-}"
     printf '%s\n' 'unset WORKFLOW_CONFIG WORKFLOW_ROOT'
-    printf 'exec %q -m vasp_workflow --root "$case_dir" "$@"\n' "$(command -v "${PYTHON_BIN:-python3}")"
+    printf 'exec %q -m crpa_workflow --root "$case_dir" "$@"\n' "$(command -v "${PYTHON_BIN:-python3}")"
   } > "$destination/workflow.sh" || return 1
   chmod +x "$destination/workflow.sh" || return 1
-  "${PYTHON_BIN:-python3}" -c 'from vasp_workflow import __version__; print(__version__)' > "$destination/.workflow-version" || return 1
+  "${PYTHON_BIN:-python3}" -c 'from crpa_workflow import __version__; print(__version__)' > "$destination/.workflow-version" || return 1
 }
 
 prepared=0

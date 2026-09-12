@@ -57,3 +57,13 @@ production or registration approval.
 The ten former root scripts/configuration/document redirects were archived. Tests
 now import the package directly, and source exports omit the retired launchers.
 After cleanup, all 119 Python tests and all four Bash regression tests passed.
+
+## Command rename — 2026-09-12
+
+The command and distribution are now `crpa-workflow`, the batch alias is
+`crpa-workflow-batch`, and the Python package is `crpa_workflow`. All 119 Python
+tests and four Bash regression tests passed after the rename. The renamed wheel
+was installed into the isolated Linux test environment; version/help, both entry
+points, initialization, mocked preparation/submission, and generated batch
+launchers passed the installed integration test. The five scientific module
+contents and legacy ZIP remain byte-identical to the preceding commit.

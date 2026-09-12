@@ -45,11 +45,11 @@ esac
 EOF
 chmod +x "$TEST_DIR/mockbin/vaspkit"
 
-cp "$SOURCE_DIR/src/vasp_workflow/resources/defaults.conf" "$TEST_DIR/workflow.conf"
+cp "$SOURCE_DIR/src/crpa_workflow/resources/defaults.conf" "$TEST_DIR/workflow.conf"
 printf '\nSBATCH_NODES=4\n' >> "$TEST_DIR/workflow.conf"
 PYTHONPATH="$SOURCE_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
 PATH="$TEST_DIR/mockbin:$PATH" \
-  python3 -m vasp_workflow --config "$TEST_DIR/workflow.conf" batch --mode prepare --no-relax \
+  python3 -m crpa_workflow --config "$TEST_DIR/workflow.conf" batch --mode prepare --no-relax \
   "$TEST_DIR/structures" "$TEST_DIR/calculations"
 
 test -s "$TEST_DIR/calculations/flat/01_scf/INCAR"

@@ -16,7 +16,7 @@ from pathlib import Path
 SOURCE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SOURCE_DIR / "src"))
 
-from vasp_workflow import prepare_wannier as preparer
+from crpa_workflow import prepare_wannier as preparer
 from tests.test_rank_wannier_bands import procar_text
 
 
@@ -166,7 +166,7 @@ NBANDS = 36
         with (self.scf / "OUTCAR").open("a") as handle:
             handle.write("E-fermi : 0.35\n")
         result = subprocess.run(
-            [sys.executable, "-B", "-m", "vasp_workflow.prepare_wannier",
+            [sys.executable, "-B", "-m", "crpa_workflow.prepare_wannier",
              "--root", str(self.root), "--elements", "Mn", "Sb", "--orbitals", "d", "p",
              "--num-bands", "2", "--vaspkit", self.vaspkit,
              "--window-method", "adaptive", "--search-energy-range", "-6", "7",
@@ -196,7 +196,7 @@ NBANDS = 36
                 with (self.scf / "OUTCAR").open("a") as handle:
                     handle.write(f"E-fermi : {fermi}\n")
                 result = subprocess.run(
-                    [sys.executable, "-B", "-m", "vasp_workflow.prepare_wannier",
+                    [sys.executable, "-B", "-m", "crpa_workflow.prepare_wannier",
                      "--root", str(self.root), "--elements", "Mn", "Sb", "--orbitals", "d", "p",
                      "--num-bands", "2", "--vaspkit", self.vaspkit, "--force",
                      "--search-energy-range", *map(str, bounds), "--frozen-character-min", "0.5"],

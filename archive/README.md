@@ -17,7 +17,7 @@ before running on another system. No simulation executable or pseudopotential
 library is included.
 
 To recover a retired root file, extract it from `retired-root-files/` into the
-repository root intentionally. Normal operation uses the installed `vasp-workflow`
+repository root intentionally. Normal operation uses the installed `crpa-workflow`
 command and does not need these files.
 
 This archive is a local backup and is excluded from wheel/source distributions

@@ -13,7 +13,7 @@ def main() -> None:
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     files = [root / "install.sh"]
-    files += sorted(path for path in (root / "src/vasp_workflow").rglob("*")
+    files += sorted(path for path in (root / "src/crpa_workflow").rglob("*")
                     if path.is_file() and path.suffix in (".py", ".sh", ".conf"))
     listing = []
     manifest = []

@@ -66,7 +66,7 @@ the cell degrees of freedom.
 
 **Output used downstream.** `CONTCAR`.
 
-**Transfer rule.** Immediately before `01_scf` runs, `vasp-workflow` copies
+**Transfer rule.** Immediately before `01_scf` runs, `crpa-workflow` copies
 `00_relax/CONTCAR` to `01_scf/POSCAR`.
 
 **Quality gate.**
@@ -111,7 +111,7 @@ all non-self-consistent downstream stages.
   occupations, magnetization, and any DFT+U or spin-orbit behavior.
 - Verify that `NBANDS`, k-point density, pseudopotentials, functional, magnetism,
   and symmetry choices match the intended cRPA study.
-- Do not rely only on `vasp-workflow status`; it detects a normal VASP timing
+- Do not rely only on `crpa-workflow status`; it detects a normal VASP timing
   footer, not scientific convergence.
 
 ### 3.3 `02_dos`: characterize energies on a uniform mesh
@@ -453,7 +453,7 @@ not evidence of `NBANDS` convergence.
 ### 4.4 Stage ownership and refresh semantics
 
 Generated stage directories contain `.generated-by-poscar-workflow`.
-`vasp-workflow` refuses to overwrite a stage lacking that marker.
+`crpa-workflow` refuses to overwrite a stage lacking that marker.
 
 For `00_relax` through `03_band`, `prepare --force` refreshes generated inputs
 in place. It does not delete old `OUTCAR`, `WAVECAR`, `CHGCAR`, or scheduler

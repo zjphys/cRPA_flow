@@ -40,7 +40,7 @@ def runtime_environment(root: Path, config: Path | None) -> dict[str, str]:
 
 
 def initialize(argv: list[str], root: Path, config: Path | None) -> int:
-    parser = argparse.ArgumentParser(prog="vasp-workflow init", description="Create a case without overwriting existing inputs.")
+    parser = argparse.ArgumentParser(prog="crpa-workflow init", description="Create a case without overwriting existing inputs.")
     parser.add_argument("directory", nargs="?", type=Path, default=root)
     parser.add_argument("--poscar", type=Path)
     parser.add_argument("--profile", choices=("local", "slurm"), default="slurm")
@@ -60,18 +60,18 @@ def initialize(argv: list[str], root: Path, config: Path | None) -> int:
         shutil.copyfile(args.poscar, destination / "POSCAR")
     (destination / "workflow.conf").write_text(content, encoding="utf-8", newline="\n")
     metadata = {
-        "software": "VASP SCF-to-cRPA Workflow", "version": __version__,
+        "software": "crpa-workflow", "version": __version__,
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "profile": "custom" if config else args.profile,
         "config_sha256": hashlib.sha256(content.encode()).hexdigest(),
     }
     (destination / ".workflow-release.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-    print(f"Initialized {destination}\nEdit workflow.conf, then run vasp-workflow --root {shlex.quote(str(destination))} doctor prepare")
+    print(f"Initialized {destination}\nEdit workflow.conf, then run crpa-workflow --root {shlex.quote(str(destination))} doctor prepare")
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="VASP SCF-to-cRPA Workflow. Put global options before COMMAND.")
+    parser = argparse.ArgumentParser(prog="crpa-workflow", description="VASP SCF-to-cRPA Workflow. Put global options before COMMAND.")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--root", type=Path, default=Path.cwd(), help="calculation directory (default: current directory)")
     parser.add_argument("--config", type=Path, help="explicit configuration file; replaces case workflow.conf")
@@ -95,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError(f"Calculation directory does not exist: {root}")
         env = runtime_environment(root, config)
         if args.command == "rank-bands":
-            return subprocess.call([sys.executable, "-m", "vasp_workflow.rank_wannier_bands", *args.arguments], cwd=root, env=env)
+            return subprocess.call([sys.executable, "-m", "crpa_workflow.rank_wannier_bands", *args.arguments], cwd=root, env=env)
         bash = shutil.which("bash")
         if bash is None or os.name == "nt":
             raise ValueError("Run workflow commands in Linux/Bash (on Windows, install and run inside WSL).")
@@ -112,5 +112,5 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def batch_main() -> int:
-    """Alias; global options are supported by vasp-workflow ... batch."""
+    """Alias; global options are supported by crpa-workflow ... batch."""
     return main(["batch", *sys.argv[1:]])

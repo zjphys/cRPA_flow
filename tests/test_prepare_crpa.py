@@ -11,7 +11,7 @@ from pathlib import Path
 SOURCE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SOURCE_DIR / "src"))
 
-from vasp_workflow import prepare_crpa as preparer
+from crpa_workflow import prepare_crpa as preparer
 
 
 POSCAR = """cRPA integration material

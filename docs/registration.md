@@ -6,7 +6,7 @@ registration jurisdiction and institution-specific requirements before final exp
 
 ## Proposed software identity
 
-Working name: VASP SCF-to-cRPA Workflow. Candidate technical version: 1.4.1.
+Working name: crpa-workflow. Candidate technical version: 1.4.1.
 The final Chinese/English registration name, copyright holder(s), authors,
 development/completion dates and registration version remain to be confirmed.
 Do not infer ownership from the developer names or select an open-source license
@@ -30,7 +30,7 @@ instructions. No template text has been copied into this manual.
 
 ## Source materials
 
-The maintained source is under `src/vasp_workflow`, with `install.sh` at the root.
+The maintained source is under `src/crpa_workflow`, with `install.sh` at the root.
 Legacy files are archived and excluded from the active source export. `tools/export_source.py` creates a deterministic, complete text listing
 and a per-file hash manifest from the current source. It excludes caches, test
 fixtures, generated calculations, third-party packages and the original cluster's

@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from vasp_workflow.cli import main
+from crpa_workflow.cli import main
 
 
 class InitializationTests(unittest.TestCase):
@@ -27,7 +27,9 @@ class InitializationTests(unittest.TestCase):
             self.assertIn("srun vasp_std", conf)
             self.assertNotIn("q_ysuan", conf)
             self.assertNotIn("/sh3/", conf)
-            self.assertEqual(json.loads((case / ".workflow-release.json").read_text())["profile"], "slurm")
+            metadata = json.loads((case / ".workflow-release.json").read_text())
+            self.assertEqual(metadata["profile"], "slurm")
+            self.assertEqual(metadata["software"], "crpa-workflow")
             (case / "POSCAR").write_text("changed by researcher")
             self.assertEqual(self.invoke("init", case, "--poscar", source), 1)
             self.assertEqual((case / "POSCAR").read_text(), "changed by researcher")

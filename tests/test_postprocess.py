@@ -13,7 +13,7 @@ import numpy as np
 VERSION_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(VERSION_DIR / "src"))
 
-from vasp_workflow import postprocess
+from crpa_workflow import postprocess
 
 
 class PostprocessSpinTests(unittest.TestCase):
@@ -64,7 +64,7 @@ class PostprocessSpinTests(unittest.TestCase):
         result = subprocess.run(
             [
                 sys.executable,
-                "-m", "vasp_workflow.postprocess",
+                "-m", "crpa_workflow.postprocess",
                 "--root",
                 str(self.root),
                 "--reuse-data",
@@ -94,7 +94,7 @@ class PostprocessSpinTests(unittest.TestCase):
         result = subprocess.run(
             [
                 sys.executable,
-                "-m", "vasp_workflow.postprocess",
+                "-m", "crpa_workflow.postprocess",
                 "--root",
                 str(self.root),
                 "--reuse-data",
@@ -206,7 +206,7 @@ class PostprocessWannierTests(unittest.TestCase):
         return subprocess.run(
             [
                 sys.executable,
-                "-m", "vasp_workflow.postprocess",
+                "-m", "crpa_workflow.postprocess",
                 "--root",
                 str(self.root),
                 "--reuse-data",

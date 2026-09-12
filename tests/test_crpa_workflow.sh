@@ -5,8 +5,8 @@ SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/version1-crpa-workflow-test.XXXXXX")"
 trap 'case "$TEST_DIR" in */version1-crpa-workflow-test.*) rm -rf -- "$TEST_DIR" ;; esac' EXIT
 
-cp "$SOURCE_DIR/src/vasp_workflow/resources/workflow.sh" "$TEST_DIR/workflow.sh"
-cp "$SOURCE_DIR/src/vasp_workflow/prepare_crpa.py" "$TEST_DIR/prepare_crpa.py"
+cp "$SOURCE_DIR/src/crpa_workflow/resources/workflow.sh" "$TEST_DIR/workflow.sh"
+cp "$SOURCE_DIR/src/crpa_workflow/prepare_crpa.py" "$TEST_DIR/prepare_crpa.py"
 chmod +x "$TEST_DIR/workflow.sh" "$TEST_DIR/prepare_crpa.py"
 
 mkdir -p "$TEST_DIR/04_wann"

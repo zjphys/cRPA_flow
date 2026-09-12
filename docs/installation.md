@@ -21,9 +21,9 @@ pip with `--python` support for the convenience installer.
 Extract the complete source release. From its directory:
 
 ```bash
-bash install.sh "$HOME/.local/share/vasp-workflow/1.4.1"
-source "$HOME/.local/share/vasp-workflow/1.4.1/bin/activate"
-vasp-workflow --version
+bash install.sh "$HOME/.local/share/crpa-workflow/1.4.1"
+source "$HOME/.local/share/crpa-workflow/1.4.1/bin/activate"
+crpa-workflow --version
 ```
 
 The installer refuses to reuse an existing destination. Use a new versioned
@@ -51,7 +51,7 @@ python -m pip wheel '.[plot]' 'setuptools>=68' -w wheelhouse
 Transfer `wheelhouse` to the cluster. In a Python environment that already has pip:
 
 ```bash
-python -m pip install --no-index --find-links wheelhouse 'vasp-scf-crpa-workflow[plot]==1.4.1'
+python -m pip install --no-index --find-links wheelhouse 'crpa-workflow[plot]==1.4.1'
 ```
 
 For source installation with `install.sh`, the matching wheelhouse can instead be
@@ -62,7 +62,7 @@ selected using `PIP_NO_INDEX=1` and `PIP_FIND_LINKS=/absolute/path/wheelhouse`.
 Run this from the source release to use the supplied structure:
 
 ```bash
-vasp-workflow init "$HOME/calculations/silicon" \
+crpa-workflow init "$HOME/calculations/silicon" \
   --poscar examples/silicon/POSCAR --profile slurm
 cd "$HOME/calculations/silicon"
 ```
@@ -74,11 +74,11 @@ for a converged production calculation. Use `--profile local` for a direct
 `vasp_std` command, or replace it with the appropriate MPI command for your system.
 
 ```bash
-vasp-workflow doctor prepare
-vasp-workflow prepare --no-relax
-vasp-workflow doctor submit
-vasp-workflow submit --job-name silicon
-vasp-workflow status
+crpa-workflow doctor prepare
+crpa-workflow prepare --no-relax
+crpa-workflow doctor submit
+crpa-workflow submit --job-name silicon
+crpa-workflow status
 ```
 
 `doctor` checks dependencies available in the current shell. It does not execute
@@ -88,7 +88,7 @@ shell; use `EXECUTION_SETUP` for setup captured in execution commands and jobs.
 
 ## Existing calculations and configuration
 
-Use `vasp-workflow --root /path/to/existing/case status` without copying software.
+Use `crpa-workflow --root /path/to/existing/case status` without copying software.
 Global options go before the command; stage-specific options go after it.
 
 Configuration selection is explicit `--config FILE`, then `WORKFLOW_CONFIG`, then
@@ -108,6 +108,24 @@ the current configuration; already generated files retain their captured command
 Do not regenerate running calculations. Review `--force` carefully because it
 rewrites workflow-owned input files and job scripts.
 
+## Command-name migration
+
+The former `vasp-workflow` / `vasp-workflow-batch` commands are now
+`crpa-workflow` / `crpa-workflow-batch`. The Python import/module name is now
+`crpa_workflow`, and the pip distribution name is now `crpa-workflow`.
+
+Install the renamed source into a new environment using the commands above, then
+activate it. An existing installation does not rename itself when the source tree
+changes. The old distribution (`vasp-scf-crpa-workflow`) is a different pip package;
+installing the renamed one does not automatically remove it. This release does not
+provide the old commands as aliases.
+
+Existing calculation directories and generated `job.sh` files need no changes.
+Old batch launchers refer to `vasp_workflow`; retain their old installation, or use
+`crpa-workflow --root /path/to/case COMMAND` from the new environment. Newly generated
+batch launchers use `crpa_workflow`. No regeneration of scientific inputs is needed
+just to use the new command name. The original legacy ZIP retains its historical names.
+
 ## Common installation issues
 
 | Problem | Action |
@@ -116,4 +134,4 @@ rewrites workflow-owned input files and job scripts.
 | Command not found | Activate the installation environment or use the full executable path. |
 | NumPy or Matplotlib unavailable | Install the `plot` extra in the environment selected by `PYTHON_BIN`. |
 | VASPKIT unavailable during preparation | Load its module or configure `VASPKIT_BIN` as an absolute executable path. |
-| Old batch launcher points at a removed install | Activate the desired release and use `vasp-workflow --root CASE`; retain old installs for reproducibility. |
+| Old batch launcher points at a removed install | Activate the desired release and use `crpa-workflow --root CASE`; retain old installs for reproducibility. |

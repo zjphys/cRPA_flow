@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Run with the absolute path to a freshly installed vasp-workflow command.
+# Run with the absolute path to a freshly installed crpa-workflow command.
 set -euo pipefail
-workflow="${1:?Pass the installed vasp-workflow executable}"
+workflow="${1:?Pass the installed crpa-workflow executable}"
 test_root="$(mktemp -d "${TMPDIR:-/tmp}/installed-workflow.XXXXXX")"
 trap 'case "$test_root" in */installed-workflow.*) rm -rf -- "$test_root" ;; esac' EXIT
 unset PYTHONPATH WORKFLOW_CONFIG WORKFLOW_ROOT WORKFLOW_PACKAGE WORKFLOW_CODE_DIR
@@ -36,7 +36,9 @@ chmod +x "$test_root/mockbin/vaspkit" "$test_root/mockbin/sbatch"
 export PATH="$test_root/mockbin:$PATH"
 export SUBMISSION_LOG="$test_root/submissions"
 cd "$test_root"
-"$workflow" --version
+"$workflow" --version | grep -Fx 'crpa-workflow 1.4.1'
+test -x "$(dirname "$workflow")/crpa-workflow-batch"
+"$(dirname "$workflow")/crpa-workflow-batch" --help
 "$workflow" --help
 "$workflow" init 'case with spaces' --poscar structures/nested/POSCAR --profile local
 cd 'case with spaces'
@@ -65,6 +67,7 @@ test ! -e 04_wann
 test ! -e 05_crpa
 "$workflow" --config "$PWD/workflow.conf" batch --mode prepare ../structures ../batch
 test -s ../batch/nested/workflow.sh
+grep -F 'crpa_workflow' ../batch/nested/workflow.sh
 test ! -e ../batch/nested/prepare_wannier.py
 (cd ../batch/nested && bash workflow.sh status)
 printf 'Installed package integration test passed.\n'

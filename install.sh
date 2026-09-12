@@ -7,7 +7,7 @@ if [[ "${1:-}" == --help ]]; then
   exit 0
 fi
 (( $# <= 1 )) || { printf 'ERROR: expected at most one installation directory.\n' >&2; exit 2; }
-venv_dir="${1:-$HOME/.local/share/vasp-workflow/venv}"
+venv_dir="${1:-$HOME/.local/share/crpa-workflow/venv}"
 if [[ -e "$venv_dir" ]]; then
   printf 'ERROR: destination already exists; choose a new directory: %s\n' "$venv_dir" >&2
   exit 1
@@ -23,5 +23,5 @@ else
   printf 'ERROR: this Python needs venv and either ensurepip or pip with --python support. Use a cluster Python environment with pip.\n' >&2
   exit 1
 fi
-"$venv_dir/bin/vasp-workflow" --version
+"$venv_dir/bin/crpa-workflow" --version
 printf '\nActivate with: source %q/bin/activate\n' "$venv_dir"

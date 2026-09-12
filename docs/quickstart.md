@@ -1,6 +1,6 @@
 # Workflow Quick Operation Guide
 
-This guide covers every public command in `vasp-workflow` and all calculation
+This guide covers every public command in `crpa-workflow` and all calculation
 stages. Run installed commands from the calculation directory. Global `--root` and `--config` options go before the command.
 
 ## 1. Setup
@@ -19,7 +19,7 @@ resources, pseudopotential setup, and INCAR templates.
 Show the built-in help:
 
 ```bash
-vasp-workflow --help
+crpa-workflow --help
 ```
 
 ## 2. Stages
@@ -41,34 +41,34 @@ are deliberately prepared and launched separately.
 Generate the relaxation, SCF, DOS, and band inputs:
 
 ```bash
-vasp-workflow prepare
+crpa-workflow prepare
 ```
 
 Skip relaxation when the supplied POSCAR is already the desired structure:
 
 ```bash
-vasp-workflow prepare --no-relax
+crpa-workflow prepare --no-relax
 ```
 
 Refresh workflow-owned stage directories after changing configuration:
 
 ```bash
-vasp-workflow prepare --force
+crpa-workflow prepare --force
 ```
 
 Run all prepared base stages sequentially in the current shell:
 
 ```bash
-vasp-workflow run
+crpa-workflow run
 ```
 
 Submit the base Slurm pipeline. SCF depends on relaxation when enabled; DOS and
 bands both depend on SCF:
 
 ```bash
-vasp-workflow submit
+crpa-workflow submit
 # Optional shared prefix: Pu-relax, Pu-scf, Pu-dos, Pu-band
-vasp-workflow submit --job-name Pu
+crpa-workflow submit --job-name Pu
 ```
 
 Both `--job-name Pu` and `--job-name=Pu` are accepted. Without this option,
@@ -91,18 +91,18 @@ jobs after changing `workflow.conf`.
 Run exactly one prepared stage directly, mainly for debugging:
 
 ```bash
-vasp-workflow execute 00_relax
-vasp-workflow execute 01_scf
-vasp-workflow execute 02_dos
-vasp-workflow execute 03_band
-vasp-workflow execute 04_wann
-vasp-workflow execute 05_crpa
+crpa-workflow execute 00_relax
+crpa-workflow execute 01_scf
+crpa-workflow execute 02_dos
+crpa-workflow execute 03_band
+crpa-workflow execute 04_wann
+crpa-workflow execute 05_crpa
 ```
 
 Check whether every registered stage is prepared, started, or finished:
 
 ```bash
-vasp-workflow status
+crpa-workflow status
 ```
 
 ## 4. Plot Bands and DOS
@@ -110,13 +110,13 @@ vasp-workflow status
 After `02_dos` and `03_band` finish, plot all available element projections:
 
 ```bash
-vasp-workflow postprocess --emin -3 --emax 4 --title "My material"
+crpa-workflow postprocess --emin -3 --emax 4 --title "My material"
 ```
 
 Plot selected elements and write PNG, PDF, and SVG files:
 
 ```bash
-vasp-workflow postprocess \
+crpa-workflow postprocess \
   --elements Mn Sb \
   --format png --format pdf --format svg \
   --output mn_sb_band_dos
@@ -125,7 +125,7 @@ vasp-workflow postprocess \
 Plot orbital components for one element:
 
 ```bash
-vasp-workflow postprocess \
+crpa-workflow postprocess \
   --orbital-element Mn \
   --orbitals dxy dyz dz2 dxz dx2-y2 \
   --emin -5 --emax 5
@@ -135,14 +135,14 @@ Reuse existing `PBAND_*.dat` and `PDOS_*.dat` without running VASPKIT again.
 Spin-polarized `_UP.dat`/`_DW.dat` pairs are detected automatically:
 
 ```bash
-vasp-workflow postprocess --reuse-data --dpi 300 --dos-max 20
+crpa-workflow postprocess --reuse-data --dpi 300 --dos-max 20
 ```
 
 After `04_wann` finishes, optionally overlay its interpolated bands on the
 projected DFT band panel while keeping the same DOS panel:
 
 ```bash
-vasp-workflow postprocess --wannier-bands --emin -3 --emax 4
+crpa-workflow postprocess --wannier-bands --emin -3 --emax 4
 ```
 
 The overlay reads `04_wann/INCAR` to determine `ISPIN`. It uses
@@ -165,7 +165,7 @@ without requiring a contiguous band-index block. The ranking CSV remains a
 separate report; it does not define the adaptive windows.
 
 ```bash
-vasp-workflow prepare-wannier \
+crpa-workflow prepare-wannier \
   --elements Mn Sb \
   --orbitals d p
 ```
@@ -190,7 +190,7 @@ The Gamma-centered Wannier mesh uses `KPR_WANN` from `workflow.conf`
 Example with every optional preparation control:
 
 ```bash
-vasp-workflow prepare-wannier \
+crpa-workflow prepare-wannier \
   --elements Mn Sb \
   --orbitals d p \
   --num-bands 22 \
@@ -207,8 +207,8 @@ vasp-workflow prepare-wannier \
 Run or submit only the prepared Wannier stage:
 
 ```bash
-vasp-workflow run-wannier
-vasp-workflow submit-wannier --job-name Pu  # Pu-wann
+crpa-workflow run-wannier
+crpa-workflow submit-wannier --job-name Pu  # Pu-wann
 ```
 
 Inspect `04_wann/OUTCAR`, the Wannier90 output, interpolated bands, and
@@ -249,20 +249,20 @@ After Wannier finishes, omit `--target-states` to select every state from `1`
 through `NUM_WANN`:
 
 ```bash
-vasp-workflow prepare-crpa
+crpa-workflow prepare-crpa
 ```
 
 To select a subset, one-based inclusive ranges and individual indices may be
 mixed:
 
 ```bash
-vasp-workflow prepare-crpa --target-states 1-5 8 10-12
+crpa-workflow prepare-crpa --target-states 1-5 8 10-12
 ```
 
 Override all optional cRPA preparation values when required:
 
 ```bash
-vasp-workflow prepare-crpa \
+crpa-workflow prepare-crpa \
   --target-states 1-10 \
   --nbandsgw 160 \
   --encutgw 350 \
@@ -279,8 +279,8 @@ against the spin-channel count stored in `WANPROJ`.
 Run or submit only the prepared cRPA stage:
 
 ```bash
-vasp-workflow run-crpa
-vasp-workflow submit-crpa --job-name Pu  # Pu-crpa
+crpa-workflow run-crpa
+crpa-workflow submit-crpa --job-name Pu  # Pu-crpa
 ```
 
 ## 7. Complete Example
@@ -288,30 +288,30 @@ vasp-workflow submit-crpa --job-name Pu  # Pu-crpa
 Local sequential workflow:
 
 ```bash
-vasp-workflow prepare --no-relax
-vasp-workflow run
-vasp-workflow postprocess --elements Mn Sb --emin -4 --emax 4
-vasp-workflow prepare-wannier \
+crpa-workflow prepare --no-relax
+crpa-workflow run
+crpa-workflow postprocess --elements Mn Sb --emin -4 --emax 4
+crpa-workflow prepare-wannier \
   --elements Mn Sb --orbitals d p
-vasp-workflow run-wannier
-vasp-workflow prepare-crpa
-vasp-workflow run-crpa
-vasp-workflow status
+crpa-workflow run-wannier
+crpa-workflow prepare-crpa
+crpa-workflow run-crpa
+crpa-workflow status
 ```
 
 Slurm workflow:
 
 ```bash
-vasp-workflow prepare --no-relax
-vasp-workflow submit --job-name Pu
+crpa-workflow prepare --no-relax
+crpa-workflow submit --job-name Pu
 # Wait for SCF, DOS, and band jobs to finish.
-vasp-workflow prepare-wannier \
+crpa-workflow prepare-wannier \
   --elements Mn Sb --orbitals d p
-vasp-workflow submit-wannier --job-name Pu
+crpa-workflow submit-wannier --job-name Pu
 # Wait for the Wannier job and inspect its results.
-vasp-workflow prepare-crpa
-vasp-workflow submit-crpa --job-name Pu
-vasp-workflow status
+crpa-workflow prepare-crpa
+crpa-workflow submit-crpa --job-name Pu
+crpa-workflow status
 ```
 
 `submit-wannier` and `submit-crpa` do not automatically add dependencies to

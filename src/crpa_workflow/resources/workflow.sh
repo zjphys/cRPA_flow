@@ -177,32 +177,32 @@ warn() { printf 'WARNING: %s\n' "$*" >&2; }
 usage() {
   cat <<'EOF'
 Usage:
-  vasp-workflow [--root DIR] [--config FILE] COMMAND [ARGS]
-  vasp-workflow init DIR --poscar FILE --profile local|slurm
-  vasp-workflow doctor prepare|plot|submit|run
-  ./workflow.sh prepare [--force] [--no-relax]
+  crpa-workflow [--root DIR] [--config FILE] COMMAND [ARGS]
+  crpa-workflow init DIR --poscar FILE --profile local|slurm
+  crpa-workflow doctor prepare|plot|submit|run
+  crpa-workflow prepare [--force] [--no-relax]
                                       Generate all inputs from POSCAR
-  ./workflow.sh run                Run stages sequentially in this shell
-  ./workflow.sh submit [--job-name PREFIX]
+  crpa-workflow run                Run stages sequentially in this shell
+  crpa-workflow submit [--job-name PREFIX]
                                     Submit an afterok-linked Slurm pipeline
-  ./workflow.sh execute STAGE      Run one prepared stage directly
-  ./workflow.sh status             Show prepared/output state
-  ./workflow.sh postprocess [ARGS] Plot element- or orbital-projected bands and DOS
-  ./workflow.sh prepare-wannier --elements E... --orbitals O... [--num-bands N]
+  crpa-workflow execute STAGE      Run one prepared stage directly
+  crpa-workflow status             Show prepared/output state
+  crpa-workflow postprocess [ARGS] Plot element- or orbital-projected bands and DOS
+  crpa-workflow prepare-wannier --elements E... --orbitals O... [--num-bands N]
                                     Generate 04_wann after DOS/bands finish
-  ./workflow.sh run-wannier        Run only the prepared 04_wann stage
-  ./workflow.sh submit-wannier [--job-name PREFIX]
+  crpa-workflow run-wannier        Run only the prepared 04_wann stage
+  crpa-workflow submit-wannier [--job-name PREFIX]
                                     Submit only the prepared 04_wann stage
-  ./workflow.sh prepare-crpa [--target-states I...]
+  crpa-workflow prepare-crpa [--target-states I...]
                                     Generate 05_crpa after 04_wann finishes
-  ./workflow.sh run-crpa           Run only the prepared 05_crpa stage
-  ./workflow.sh submit-crpa [--job-name PREFIX]
+  crpa-workflow run-crpa           Run only the prepared 05_crpa stage
+  crpa-workflow submit-crpa [--job-name PREFIX]
                                     Submit only the prepared 05_crpa stage
 
 Only POSCAR is required as user-supplied scientific input. VASPKIT must be
 configured with a licensed pseudopotential library to generate POTCAR. It also
 generates Gamma-centered relaxation/SCF/DOS meshes and the symmetry-aware band
-path. Use vasp-workflow init to create a new case configuration, or edit
+path. Use crpa-workflow init to create a new case configuration, or edit
 workflow.conf when site or calculation defaults need changing.
 That file can also replace each complete INCAR template, the Slurm header,
 shared runtime setup, and individual stage commands.
@@ -218,7 +218,7 @@ Submission commands accept "--job-name PREFIX" or "--job-name=PREFIX". The
 stage name is appended automatically, for example "--job-name Pu" submits
 Pu-relax, Pu-scf, Pu-dos, and Pu-band.
 
-After the DOS and band stages finish, run "workflow.sh postprocess". VASPKIT
+After the DOS and band stages finish, run "crpa-workflow postprocess". VASPKIT
 tasks 213 and 113 generate element-projected band and DOS data. Plot
 options such as "--emin -3 --emax 4 --title Material" are forwarded to
 postprocess.py. Python, NumPy, Matplotlib, and VASPKIT are required.
@@ -228,7 +228,7 @@ The DOS panel always includes the selected element total(s).
 
 To prepare a Wannier calculation after SCF and DOS finish (after inspecting the
 optional band stage when available), use for example:
-  workflow.sh prepare-wannier --elements Mn Sb --orbitals d p
+  crpa-workflow prepare-wannier --elements Mn Sb --orbitals d p
 Elements and orbitals are paired by position. NUM_WANN defaults to the sum of
 the matching POSCAR atom counts times shell multiplicities (s=1, p=3, d=5,
 f=7); --num-bands N overrides it. The command accepts --kpr VALUE
@@ -249,9 +249,9 @@ interpolation accuracy remain unverified. A missing SCF PROCAR is an error.
 
 After 04_wann finishes successfully, prepare cRPA. By default all Wannier
 states from 1 through NUM_WANN are excluded from screening:
-  workflow.sh prepare-crpa
+  crpa-workflow prepare-crpa
 Use --target-states to select a subset, for example:
-  workflow.sh prepare-crpa --target-states 1-5 8 10-12
+  crpa-workflow prepare-crpa --target-states 1-5 8 10-12
 Inclusive ranges and individual indices can be mixed, for example 1-5 8 10-12.
 The command accepts --nbandsgw N, --encutgw EV, and --force. By default it
 uses the completed Wannier NBANDS for NBANDSGW and two-thirds of ENCUT for
@@ -584,7 +584,7 @@ run_python_tool() {
   local module="$1"
   shift
   if [[ "${WORKFLOW_PACKAGE:-0}" == 1 ]]; then
-    "$PYTHON_BIN" -m "vasp_workflow.$module" "$@"
+    "$PYTHON_BIN" -m "crpa_workflow.$module" "$@"
   else
     "$PYTHON_BIN" "$CODE_DIR/$module.py" "$@"
   fi
@@ -818,5 +818,5 @@ case "${1:-}" in
   run-crpa) run_crpa ;;
   submit-crpa) shift; submit_crpa "$@" ;;
   -h|--help|help|"") usage ;;
-  *) die "Unknown command '$1'. Run ./workflow.sh --help." ;;
+  *) die "Unknown command '$1'. Run crpa-workflow --help." ;;
 esac

@@ -1,4 +1,4 @@
-# VASP SCF-to-cRPA Workflow — User Manual
+# crpa-workflow — User Manual
 
 [中文版用户手册](user_manual_zh.md)
 
@@ -65,9 +65,9 @@ universal requirements.
 From a complete source distribution:
 
 ```bash
-bash install.sh "$HOME/.local/share/vasp-workflow/1.4.1"
-source "$HOME/.local/share/vasp-workflow/1.4.1/bin/activate"
-vasp-workflow --version
+bash install.sh "$HOME/.local/share/crpa-workflow/1.4.1"
+source "$HOME/.local/share/crpa-workflow/1.4.1/bin/activate"
+crpa-workflow --version
 ```
 
 See [Installation](installation.md) for existing environments, offline installation
@@ -81,7 +81,7 @@ of the software source. An existing `POTCAR` can be supplied; otherwise configur
 VASPKIT to generate it from an appropriate pseudopotential library.
 
 ```bash
-vasp-workflow init my-material --poscar /path/to/POSCAR --profile slurm
+crpa-workflow init my-material --poscar /path/to/POSCAR --profile slurm
 cd my-material
 ```
 
@@ -123,14 +123,14 @@ Use the supplied `examples/silicon/POSCAR` as a small input-format demonstration
 It is not a validated reference calculation.
 
 ```bash
-vasp-workflow init silicon --poscar examples/silicon/POSCAR --profile slurm
+crpa-workflow init silicon --poscar examples/silicon/POSCAR --profile slurm
 cd silicon
 # Edit workflow.conf for the cluster and calculation.
-vasp-workflow doctor prepare
-vasp-workflow prepare --no-relax
-vasp-workflow doctor submit
-vasp-workflow submit --job-name silicon
-vasp-workflow status
+crpa-workflow doctor prepare
+crpa-workflow prepare --no-relax
+crpa-workflow doctor submit
+crpa-workflow submit --job-name silicon
+crpa-workflow status
 ```
 
 `prepare --no-relax` generates `01_scf`, `02_dos` and `03_band` using the supplied
@@ -139,7 +139,7 @@ SCF consumes its completed `CONTCAR`; DOS and bands consume SCF's charge density
 Slurm submissions use `afterok` dependencies: relaxation → SCF → DOS/bands.
 
 On a direct-execution system, initialize with `--profile local`, configure the
-execution command and use `vasp-workflow run` after preparation. Direct execution
+execution command and use `crpa-workflow run` after preparation. Direct execution
 runs sequentially and occupies the current session. Follow your site's rules about
 where calculations may run.
 
@@ -148,7 +148,7 @@ where calculations may run.
 Global options precede the command:
 
 ```bash
-vasp-workflow --root /path/to/case --config /path/to/custom.conf prepare
+crpa-workflow --root /path/to/case --config /path/to/custom.conf prepare
 ```
 
 | Command | Function and main options |
@@ -186,8 +186,8 @@ For detailed plotting and scientific command options, see the
 After SCF, DOS and the requested band calculation complete:
 
 ```bash
-vasp-workflow postprocess --elements Si --emin -5 --emax 5
-vasp-workflow prepare-wannier --elements Si Si --orbitals s p
+crpa-workflow postprocess --elements Si --emin -5 --emax 5
+crpa-workflow prepare-wannier --elements Si Si --orbitals s p
 ```
 
 Elements and orbitals in Wannier preparation are paired by position: here `Si:s`
@@ -205,10 +205,10 @@ Inspect `04_wann/wannier_window_diagnostics.json`, the generated input and the
 chosen orbital subspace before submission:
 
 ```bash
-vasp-workflow submit-wannier --job-name silicon
+crpa-workflow submit-wannier --job-name silicon
 # Wait for completion; inspect localization and interpolated bands.
-vasp-workflow prepare-crpa --target-states 1-8
-vasp-workflow submit-crpa --job-name silicon
+crpa-workflow prepare-crpa --target-states 1-8
+crpa-workflow submit-crpa --job-name silicon
 ```
 
 The target-state range is an illustration for the eight Wannier functions inferred
@@ -226,9 +226,9 @@ Inputs can be flat `POSCAR*`, `*.vasp` or `*.poscar` files, or nested folders
 containing `POSCAR`. Supply a reviewed configuration explicitly:
 
 ```bash
-vasp-workflow --config /path/to/workflow.conf batch \
+crpa-workflow --config /path/to/workflow.conf batch \
   --dry-run --mode prepare /path/to/structures /path/to/calculations
-vasp-workflow --config /path/to/workflow.conf batch \
+crpa-workflow --config /path/to/workflow.conf batch \
   --mode prepare /path/to/structures /path/to/calculations
 ```
 
@@ -239,7 +239,7 @@ to `submit`; specify `--mode prepare` to generate inputs for review first.
 Each case contains its POSCAR, a configuration copy, a small `workflow.sh` launcher,
 version metadata and generated stages. The launcher refers to the installation
 that created it; retain that installation or invoke a different installed release
-explicitly with `vasp-workflow --root CASE`.
+explicitly with `crpa-workflow --root CASE`.
 
 Existing cases are skipped by default. `--force` refreshes batch-owned cases, but
 cases with a changed POSCAR or without the batch ownership marker are skipped.

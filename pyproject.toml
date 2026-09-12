@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vasp-scf-crpa-workflow"
+name = "crpa-workflow"
 version = "1.4.1"
 description = "Command-line preparation, execution and analysis of VASP SCF-to-cRPA workflows"
 readme = "README.md"
@@ -14,11 +14,11 @@ dependencies = []
 plot = ["numpy>=1.23", "matplotlib>=3.6"]
 
 [project.scripts]
-vasp-workflow = "vasp_workflow.cli:main"
-vasp-workflow-batch = "vasp_workflow.cli:batch_main"
+crpa-workflow = "crpa_workflow.cli:main"
+crpa-workflow-batch = "crpa_workflow.cli:batch_main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-vasp_workflow = ["resources/*.sh", "resources/*.conf"]
+crpa_workflow = ["resources/*.sh", "resources/*.conf"]

@@ -9,9 +9,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from vasp_workflow import prepare_wannier as preparer
-from vasp_workflow import rank_wannier_bands as ranker
-from vasp_workflow import wannier_windows as selector
+from crpa_workflow import prepare_wannier as preparer
+from crpa_workflow import rank_wannier_bands as ranker
+from crpa_workflow import wannier_windows as selector
 from tests.test_prepare_wannier_integration import POSCAR
 
 

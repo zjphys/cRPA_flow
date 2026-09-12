@@ -11,8 +11,8 @@ from pathlib import Path
 SOURCE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SOURCE_DIR / "src"))
 
-from vasp_workflow import prepare_wannier as preparer
-from vasp_workflow import rank_wannier_bands as ranker
+from crpa_workflow import prepare_wannier as preparer
+from crpa_workflow import rank_wannier_bands as ranker
 
 
 KPOINT_PATH = """header
