@@ -332,8 +332,7 @@ When `ENCUT=auto`, the workflow reads every `ENMAX` value from the root
 up to the next 5 eV:
 
 $$
-\mathrm{ENCUT}
-=
+\mathrm{ENCUT}=
 \operatorname{ceil}_{5\,\mathrm{eV}}
 \left(f_{\mathrm{ENCUT}} \max_i \mathrm{ENMAX}_i\right).
 $$
