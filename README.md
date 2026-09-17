@@ -79,7 +79,6 @@ Scientific algorithms are preserved from Git baseline
 - [Quick guide](docs/quickstart.md): detailed operation examples.
 - [Physics reference](docs/physics_reference.md): methods and scientific checks.
 - [Developer guide](docs/developer_guide.md): architecture, compatibility and testing.
-- [Registration preparation](docs/registration.md): source/manual export and required applicant details.
 - [Changelog](CHANGELOG.md): release changes.
 - [Validation record](docs/validation.md): checks and remaining production verification.
 

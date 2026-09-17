@@ -7,8 +7,6 @@
 - Restore existing Wannier results if forced installation fails.
 - Honor configured postprocessing VASPKIT with CLI override precedence.
 - Validate complete text WANPROJ dimensions and transformation blocks.
-- Regenerate registration drafts from release metadata with pending ownership
-  facts and verifiable source, input, PDF and ZIP snapshots.
 
 - Rename the command to `crpa-workflow`, the batch alias to `crpa-workflow-batch`,
   the Python package to `crpa_workflow`, and the distribution to `crpa-workflow`.
@@ -19,7 +17,7 @@
 - Archive the original code, cluster configuration and retired root launchers; use the installed package commands.
 - Batch cases use a launcher and configuration instead of duplicating source code.
 - Move Python implementation and shell resources under `src/crpa_workflow`.
-- Add installation, developer and registration documentation and a silicon example.
+- Add installation and developer documentation and a silicon example.
 - Keep scientific algorithms unchanged; compare against baseline commit
   `13b6b6c1166b7417c9c748fd99207520db86adee`.
 

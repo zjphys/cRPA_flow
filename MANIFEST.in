@@ -4,6 +4,6 @@ recursive-include src *.py *.sh *.conf
 recursive-include docs *.md *.json
 recursive-include examples POSCAR *.md
 recursive-include tests *.py *.sh *.dat KLABELS
-recursive-include tools *.py *.txt
+prune 软著申请归档_2026-09-16
 global-exclude *.pyc
 global-exclude __pycache__

@@ -15,7 +15,7 @@
 | `src/crpa_workflow/postprocess.py` | Projected band/DOS plots |
 | `archive/legacy-files-1.4.zip` | Preserved original sources and retired root files; excluded from distributions |
 | `tests/` | Scientific unit tests and mocked workflow integration tests |
-| `docs/` | Maintained user, developer and registration documents |
+| `docs/` | Maintained user and developer documents |
 
 Use the installed command or `PYTHONPATH=src python -m crpa_workflow` from the
 repository root. Tests import the package directly. The old root launchers and

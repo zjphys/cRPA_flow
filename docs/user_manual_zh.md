@@ -1,12 +1,11 @@
-# crpa-workflow 用户手册（中文版）
+# Wannier能量窗口自动确定与cRPA计算全流程控制软件 用户手册
 
-**软件版本：** 1.0.0（候选版本）\
+**软件版本：** V1.0.0（候选版本；技术项目：crpa-workflow 1.0.0）\
 **文档状态：** 待审阅草稿\
-**编写日期：** 2026年9月11日\
-**适用对象：** 在 Linux 工作站或高性能计算集群上开展 VASP 计算的科研人员\
-**软著登记名称、著作权人及开发完成日期：** 待申请人确认
+**文档更新日期：** 2026年9月17日\
+**适用对象：** 在 Linux 工作站或高性能计算集群上开展 VASP 计算的科研人员
 
-本手册说明当前软件的安装、配置和操作方法，可作为软件著作权登记用户手册的编写基础。正式提交前，应确认软件名称和版本，并补充经确认的实际运行截图及计算结果。本文中的命令、文件名和参数名保留程序中的英文写法。
+本手册说明软件的安装、配置、自动选窗、阶段提交和结果查看方法。第4章以算例提供者提供的γ-Ce命令记录、配置、Wannier输入、选窗诊断和三张结果图说明操作过程，展示实际窗口数值及cRPA输出。本文中的命令、文件名和参数名保留程序中的英文写法。
 
 [English manual / 英文手册](user_manual.md)
 
@@ -15,7 +14,7 @@
 1. 软件概述
 2. 运行环境与安装
 3. 计算目录与配置
-4. 首次计算操作示例
+4. γ-Ce计算操作实例
 5. 命令说明
 6. 能带、态密度绘图与能带排序
 7. Wannier 与 cRPA 计算
@@ -23,13 +22,14 @@
 9. 输入、输出与状态查询
 10. 常见问题与恢复操作
 11. 物理结果检查与验证范围
-12. 软著材料完善说明
 
 ## 1. 软件概述
 
 ### 1.1 用途
 
-crpa-workflow 用于组织和管理基于 VASP 的电子结构计算流程，包括可选的结构弛豫、自洽场计算、态密度计算、能带计算、Wannier 构建，以及约束随机相位近似（cRPA）计算。
+本软件的技术项目名为 crpa-workflow，核心功能是根据目标轨道投影与能带数据自动确定 Wannier 能量窗口，并控制从前置电子结构计算、Wannier 构建到约束随机相位近似（cRPA）计算的各阶段操作。
+
+窗口选择以用户指定的目标轨道、搜索范围与约束参数为输入，自动生成外窗口，并在满足约束时生成冻结窗口，同时保存诊断信息和 Wannier 输入。流程控制覆盖可选结构弛豫、自洽场、态密度、能带、Wannier 和 cRPA 阶段的输入准备、数据衔接、执行、作业提交及文件状态查询。
 
 软件负责生成输入文件和作业脚本、安排阶段之间的数据传递、提交具有依赖关系的 Slurm 作业、查询基于输出文件的计算状态，以及进行轨道投影分析、Wannier 能量窗口选择和能带／态密度绘图。
 
@@ -39,6 +39,7 @@ crpa-workflow 用于组织和管理基于 VASP 的电子结构计算流程，包
 
 | 功能 | 说明 |
 | --- | --- |
+| Wannier 能量窗口自动确定 | 按目标轨道投影、局部权重覆盖和能态数量约束选择外窗口与可行的冻结窗口，生成诊断报告 |
 | 计算初始化 | 创建独立的材料计算目录和配置文件 |
 | 环境检查 | 检查当前终端中可用的工具、Python 环境及部分输入条件 |
 | 基础计算准备 | 生成结构弛豫、SCF、DOS 和能带阶段的输入及作业脚本 |
@@ -87,6 +88,8 @@ flowchart LR
 
 计算所需 CPU、内存和磁盘空间取决于原子数、k 点、能带数及计算方法。应根据实际体系进行资源评估；手册示例中的资源数不代表通用的生产计算配置。
 
+本实例在远程Linux集群测试，算例提供者确认使用VASP 6.5.1和VASPKIT 1.5.1。提供的环境检测报告记录CentOS Linux 7、Python 3.13.5、Bash 4.2.46和Slurm 19.05.7；这是检测时的会话环境，具体算例参数见第4章。开发平台为Windows、VS Code和WSL Ubuntu。
+
 ### 2.2 使用安装脚本
 
 解压完整源码发布包，在包含 `install.sh` 的目录中执行：
@@ -121,7 +124,7 @@ python -m pip install .
 
 原命令 `vasp-workflow` 和 `vasp-workflow-batch` 已分别更名为 `crpa-workflow` 和 `crpa-workflow-batch`；Python 模块名为 `crpa_workflow`，pip 包名为 `crpa-workflow`。本版本不提供旧命令别名，已有安装不会自动改名，应将新源码安装到新环境并激活。
 
-现有计算目录和已生成的 `job.sh` 无需修改。旧批量启动脚本仍引用 `vasp_workflow`，可以保留原安装环境继续使用，或在新环境中通过 `crpa-workflow --root /path/to/case COMMAND` 管理已有计算。名称迁移本身不要求重新生成科学计算输入。旧版本 ZIP 备份保留历史名称。
+仅命令名称迁移本身不要求修改现有计算目录、已生成的 `job.sh` 或科学计算输入。旧批量启动脚本仍引用 `vasp_workflow`，可以保留原安装环境继续使用，或在新环境中通过 `crpa-workflow --root /path/to/case COMMAND` 管理已有计算。如需获得第11章所述的独立执行修复，须重新生成已有作业脚本。旧版本 ZIP 备份保留历史名称。
 
 ### 2.5 离线安装
 
@@ -153,7 +156,7 @@ cd my-material
 
 将 `/path/to/POSCAR` 替换为实际输入文件路径。输入结构应采用 VASP 5 风格，元素符号位于第 6 行。创建时会生成 `workflow.conf` 和版本元数据，并在指定 `--poscar` 时复制输入结构。
 
-初始化会拒绝覆盖已有配置、初始化元数据或待写入的 POSCAR。该命令只建立计算目录，不会直接开始 VASP 计算。计算目录无需包含程序源码。
+初始化会拒绝覆盖已有配置、初始化元数据或待写入的 POSCAR。该命令只建立计算目录，不会直接开始 VASP 计算。计算目录无需包含程序源码。可提供已有的 `POTCAR`，或配置 VASPKIT 从适当的赝势库生成它。
 
 `--profile` 支持两种模式：
 
@@ -213,18 +216,18 @@ cd my-material
 2. 环境变量 `WORKFLOW_CONFIG` 指定的文件。
 3. 计算目录中的 `workflow.conf`。
 
-显式指定的文件会替代计算目录配置，不是与它叠加合并。所选配置中的赋值会覆盖同名环境变量；缺失的变量采用后端的历史回退默认值，可能与上表的新建配置不同。
+显式指定的文件会替代计算目录配置，不是与它叠加合并。所选配置中的赋值会覆盖同名环境变量；配置未设置的变量保留继承的环境值（若有），否则采用后端的历史回退默认值，可能与上表的新建配置不同。更多说明见[安装指南（英文）](installation.md)。
 
 `init` 的行为有所区别：指定全局 `--config FILE` 时原样复制该配置，不再追加 local/slurm 默认配置；未指定时使用随软件提供的默认配置及所选 profile。初始化不从 `WORKFLOW_CONFIG` 获取配置。
 
-## 4. 首次计算操作示例
+### 3.5 硅结构输入演示
 
-以下操作从完整源码发布包目录开始，使用随包提供的硅结构 `examples/silicon/POSCAR`。该文件演示输入格式，不是已经验证的收敛基准结果。
+随软件提供的 `examples/silicon/POSCAR` 含两个 Si 原子，用于演示输入格式，不是已验证的参考计算。在源码目录中创建独立的硅计算目录：
 
 ```bash
 crpa-workflow init silicon --poscar examples/silicon/POSCAR --profile slurm
 cd silicon
-# 编辑 workflow.conf，设置实际集群环境、资源和计算参数。
+# 根据集群和计算需求编辑 workflow.conf。
 crpa-workflow doctor prepare
 crpa-workflow prepare --no-relax
 crpa-workflow doctor submit
@@ -232,26 +235,151 @@ crpa-workflow submit --job-name silicon
 crpa-workflow status
 ```
 
-各步骤的含义如下：
+上述操作使用提供的结构准备 `01_scf`、`02_dos` 和 `03_band`。如需结构弛豫，省略 `--no-relax` 并保持 `RUN_RELAX=yes`；SCF 随后使用弛豫完成的 `CONTCAR`，DOS 和能带使用 SCF 电荷密度。Slurm 采用 `afterok` 依赖：弛豫 → SCF → DOS/能带。
 
-1. `init` 创建计算目录并复制结构文件。
-2. 编辑配置，确保执行命令、分区、资源及科学参数适合实际体系。
-3. `doctor prepare` 检查当前终端中的准备工具及 POSCAR 是否存在。
-4. `prepare --no-relax` 跳过弛豫，生成 SCF、DOS、能带目录及相应输入和作业脚本。
-5. `doctor submit` 检查提交命令和基本资源数量设置。
-6. `submit` 提交基础作业，并建立 `afterok` 依赖关系。
-7. `status` 根据已有文件报告阶段状态；实际排队和运行情况应同时查看 Slurm。
+直接执行时，初始化采用 `--profile local`，配置执行命令，并在准备后使用 `crpa-workflow run`。直接执行按顺序运行并占用当前会话，应遵守集群关于计算运行位置的规定。
 
-如需结构弛豫，应保持 `RUN_RELAX=yes`，并执行不带 `--no-relax` 的 `prepare`。弛豫后的 CONTCAR 会用于 SCF，SCF 的电荷密度会用于 DOS 和能带计算。
+第6至7章中的 Si 绘图及 Wannier/cRPA 命令针对这个独立算例，应在所需前序计算完成并检查结果后执行。第4章使用 γ-Ce，轨道和目标态选择与硅算例不同。
 
-如果准备直接运行，应初始化为 `--profile local`，根据机器配置调整执行命令，然后执行：
+## 4. γ-Ce计算操作实例
+
+### 4.1 实例准备与配置
+
+本章依据算例提供者提供的γ-Ce算例材料编写，包含命令记录、配置、Wannier阶段INCAR、自动选窗诊断、两张能带/DOS图及cRPA结果截图。下列命令按当前软件接口整理，不作为原始终端执行日志。
+
+使用者先准备实际γ-Ce结构文件，按第3.1节初始化独立目录，并配置集群环境。以下`/path/to/gamma-Ce`表示实际计算根目录；仅含图表和命令记录的材料目录不能直接作为完整计算目录运行。
+
+```bash
+cd /path/to/gamma-Ce
+crpa-workflow --version
+crpa-workflow doctor prepare
+```
+
+提供的配置包含以下设置；这些是本案例的作业请求和输入设置，实际分配节点及计算结果仍以作业记录为准。
+
+| 项目 | 本案例配置 |
+| --- | --- |
+| Slurm分区 | `q_ysuan_384` |
+| 节点和任务 | 4节点，每节点56任务，每任务1 CPU；请求总任务数224 |
+| 时间限制 | `24:00:00` |
+| 最终执行命令 | `mpirun -np "$SLURM_NTASKS" vasp_std` |
+| 环境载入 | 在`SBATCH_TEMPLATE`中载入VASP环境脚本；路径应按实际集群配置 |
+| 截断能 | 配置为`ENCUT=auto`、`ENCUT_FACTOR=1.50`；提供的Wannier INCAR中`ENCUT=410` eV |
+| SCF与DOS网格设置 | `KPR_SCF=0.02`，`KPR_DOS=0.02` |
+| Wannier网格设置 | `KPR_WANN=0.04` |
+| 电子收敛与DOS采样 | `EDIFF=1e-6`，`NEDOS=2000` |
+| cRPA资源 | 继承上述Slurm设置，`CRPA_KPAR=4` |
+
+`workflow.conf`末尾对默认执行命令再次赋值，该赋值覆盖前面的`vasp_std`。本配置依赖Slurm提供`SLURM_NTASKS`，且环境载入位于作业脚本模板中，因此本章采用`submit`类命令。准备和绘图前，当前终端也应能找到VASPKIT；作业脚本内的环境设置不会自动作用于这些本地准备命令。
+
+### 4.2 准备并提交基础阶段
 
 ```bash
 crpa-workflow prepare --no-relax
-crpa-workflow run
+crpa-workflow doctor submit
+crpa-workflow submit --job-name Ce
+crpa-workflow status
 ```
 
-直接运行按顺序执行已准备的基础阶段并占用当前会话。应遵守所在集群对登录节点和计算节点的使用要求。
+本例显式使用`--no-relax`，跳过结构弛豫，即使配置中`RUN_RELAX=yes`也不准备该阶段。准备后检查`01_scf`、`02_dos`和`03_band`中的输入及`job.sh`；提交时DOS和能带分别依赖SCF成功结束。等待各阶段完成并检查输出后再绘图。`status`显示的是文件状态，排队和运行情况应同时查看Slurm作业记录。
+
+### 4.3 查看Ce轨道投影能带与态密度
+
+```bash
+crpa-workflow postprocess --orbital-element Ce --orbitals p d f
+```
+
+本命令展示Ce的p、d、f轨道分量，默认输出`projected_band_dos.png`和同名PDF。图1左侧为投影能带，右侧为总态密度和轨道分辨态密度，纵轴统一为相对费米能`E-E_F`。p、d、f投影分别使用蓝色、橙色和绿色标记；能带标记面积用于表示投影权重。
+
+![图1 γ-Ce的Ce-p、Ce-d、Ce-f投影能带与态密度（算例提供者提供）](assets/gamma-ce/projected_band_dos.png)
+
+图中费米能附近可见较明显的Ce-f投影；读者可据轨道特征选择拟研究子空间。绘图中的`p d f`用于展示，下一步Wannier输入中的`f d`用于构建投影子空间，两者用途不同。
+
+### 4.4 自动选窗及Wannier构建
+
+SCF和DOS完成、所需输入齐备后，在同一计算根目录执行：
+
+```bash
+crpa-workflow prepare-wannier --elements Ce Ce --orbitals f d
+```
+
+该选择按位置配对为`Ce:f`、`Ce:d`。本例诊断记录使用`adaptive`方法，搜索范围为相对SCF费米能的`-20`至`20` eV，外窗口覆盖比例为`0.8`，冻结轨道特征阈值为`0.70`，边界余量为`0.1` eV，与当前版本默认参数一致。
+
+程序读取SCF投影及DOS能量数据，自动选择外窗口和可行的冻结窗口，将结果写入`04_wann/INCAR`的`WANNIER90_WIN`部分，并生成`04_wann/wannier_window_diagnostics.json`。检查方法及字段见第7.1节；此处不要求手工试填四个能量边界。
+
+本例SCF费米能为`6.8158` eV。诊断文件的四个绝对窗口端点与提供的INCAR一致，且满足“绝对能量＝相对能量＋费米能”：
+
+| 窗口 | 相对费米能的下限/上限（eV） | 写入INCAR的下限/上限（eV） |
+| --- | --- | --- |
+| 外窗口 | `-1.5000 / 19.7500` | `5.3158 / 26.5658` |
+| 冻结窗口 | `-0.4000 / 1.9000` | `6.4158 / 8.7158` |
+
+提供的INCAR设定`NUM_WANN=12`、`NBANDS=112`。诊断中外窗口的最少能态数为17，不小于12；冻结窗口的能态数范围为7至10。Ce:f和Ce:d的最低局部覆盖比例分别约为93.36%和85.70%，`warnings`为空。该诊断只检查提供的SCF/DOS网格，尚不能据此认定新Wannier网格或插值误差已经收敛。
+
+本例Wannier输入包含`num_iter=0`和`dis_num_iter=1000`：前者不进行最大局域化迭代，后者设置解缠迭代次数。因此本例以投影Wannier构建及能带比较展示功能，不表述为最大局域化迭代已收敛。参数含义参见[Wannier90用户指南](https://github.com/wannier-developers/wannier90/blob/develop/docs/docs/user_guide/wannier90/parameters.md)。
+
+确认输入和选窗诊断后，提交Wannier阶段：
+
+```bash
+crpa-workflow submit-wannier --job-name Ce
+```
+
+原命令记录为`run-wannier --job-name Ce`，当前接口的`run-wannier`不接受附加参数。本章改用与案例Slurm配置一致的`submit-wannier --job-name Ce`；如果在已分配的计算资源中直接执行，应先确保环境和执行命令适用，再使用不带参数的`crpa-workflow run-wannier`。
+
+Wannier计算完成并生成插值能带后执行：
+
+```bash
+crpa-workflow postprocess --wannier-bands --orbital-element Ce \
+  --orbitals p d f --output wannier
+```
+
+该命令在投影能带上叠加Wannier插值能带，输出`wannier.png`和同名PDF。图2中红色虚线为Wannier能带，可与原始能带逐段比较。
+
+![图2 γ-Ce的Wannier插值能带与投影能带叠加（算例提供者提供）](assets/gamma-ce/wannier.png)
+
+图中若干分支存在可见偏差。检查时应结合选定子空间、目标能区和实际窗口判断插值质量；本图用于展示软件叠加比较功能，不能代替误差统计或收敛检查。
+
+### 4.5 准备并提交cRPA
+
+Wannier阶段完成且前序文件检查通过后执行：
+
+```bash
+crpa-workflow prepare-crpa --target-states 1-7
+crpa-workflow submit-crpa --job-name Ce
+crpa-workflow status
+```
+
+`1-7`来自本例命令记录，表示12个Wannier函数中的第1至第7个态；输入中投影顺序为`Ce:f`、`Ce:d`。实际使用时应结合结构、投影定义和生成的基组顺序核对目标态的物理含义，不把编号范围直接照搬到其他材料。
+
+原记录最后一条`submit-crpa --job-name`缺少前缀，本章补为`Ce`。提交后查看`05_crpa/job.sh`、`INCAR`和实际输出。可用以下只读命令定位结果：
+
+```bash
+grep -A 4 "averaged interaction parameter" 05_crpa/OUTCAR
+```
+
+![图3 γ-Ce的cRPA平均相互作用参数输出截图（算例提供者提供）](assets/gamma-ce/crpa_result.jpg)
+
+截图中的三行结果抄录如下，保留原标签大小写和两列数值；小写`u`与大写`U`分开记录，不将其改写成其他参数名称。
+
+| 输出标签 | 第一数值列 | 第二数值列 |
+| --- | --- | --- |
+| `screened Hubbard U` | `2.8538` | `-0.0000` |
+| `screened Hubbard u` | `2.0564` | `-0.0000` |
+| `screened Hubbard J` | `0.3851` | `0.0000` |
+
+上述数值来自算例提供者提供的终端截图，用于说明结果读取方式。完整OUTCAR、频率设置及参数收敛记录未随本轮材料提供；不据该截图片段断言所有收敛条件均已满足。`status`的完成标记仍需结合计算日志判断。
+
+### 4.6 操作检查要点
+
+| 操作节点 | 查看内容 | 后续操作 |
+| --- | --- | --- |
+| 基础计算准备后 | 各阶段INCAR、KPOINTS、POTCAR及job.sh | 确认配置后提交 |
+| SCF、DOS、能带完成后 | 输出文件、作业状态及图1 | 核对轨道后准备Wannier |
+| 自动选窗后 | 窗口诊断、NUM_WANN及WANNIER90_WIN | 处理警告后提交Wannier |
+| Wannier完成后 | 重启文件、插值输出及图2 | 核对基组及目标态编号 |
+| cRPA准备后 | NTARGET_STATES、NBANDSGW、ENCUTGW及资源 | 确认后提交cRPA并检查结果 |
+
+`submit-wannier`和`submit-crpa`不会自动等待前序作业。每一步均应在所需前序阶段完成后执行；重复准备已存在的阶段前先检查已有结果，避免盲目使用`--force`。
 
 ## 5. 命令说明
 
@@ -288,7 +416,7 @@ crpa-workflow --root /path/to/case --config /path/to/custom.conf prepare
 | `run-crpa`、`submit-crpa` | 直接执行或提交 cRPA 阶段 |
 | `batch [OPTIONS] STRUCTURE_DIR [CALCULATION_DIR]` | 批量准备、运行或提交多个结构 |
 
-`doctor` 不执行 VASP、VASPKIT 或 Slurm 作业，也不执行配置中的环境加载命令。检查通过表示当前终端满足其检查范围，不能据此确认计算节点环境、赝势库或物理结果正确。
+`doctor` 不执行 VASP、VASPKIT 或 Slurm 作业，也不执行配置中的环境加载命令。检查通过表示当前终端满足其检查范围，不能据此确认计算节点环境、赝势库或物理结果正确。更多选项见[命令速查（英文）](quickstart.md)及各命令的 `--help`。
 
 ### 5.3 提交与独立作业脚本
 
@@ -307,7 +435,7 @@ sbatch job.sh
 
 ### 6.1 元素投影绘图
 
-DOS 和能带阶段完成后，可执行：
+第3.5节的硅算例在 DOS 和能带阶段完成后，可执行：
 
 ```bash
 crpa-workflow postprocess --elements Si --emin -5 --emax 5
@@ -352,7 +480,7 @@ crpa-workflow rank-bands --elements Mn Sb --orbitals d p --csv band_ranking.csv
 
 ### 7.1 Wannier 输入准备
 
-在 SCF、DOS 以及所需的能带计算完成并检查结果后执行：
+对第3.5节的硅算例，在 SCF、DOS 以及所需的能带计算完成并检查结果后执行：
 
 ```bash
 crpa-workflow prepare-wannier --elements Si Si --orbitals s p
@@ -372,7 +500,25 @@ crpa-workflow prepare-wannier --elements Si Si --orbitals s p
 | `--kpr` | 默认来自 `KPR_WANN`，控制 Wannier 网格生成 |
 | `--force` | 有意重新生成已存在的工作流阶段 |
 
-搜索区间必须具有有限且满足 `MIN < MAX` 的端点。窗口不要求包含费米能。如果没有符合条件的冻结窗口，程序可能生成只有外窗口的输入，并在诊断文件中说明原因。
+SCF 费米能必须为有限数值，搜索区间必须具有有限且满足 `MIN < MAX` 的端点。窗口不要求包含费米能。如果没有符合条件的冻结窗口，程序可能生成只有外窗口的输入，并在诊断文件中说明原因。
+
+自动选择的处理顺序如下：
+
+1. 以 SCF 费米能为统一参考，读取目标元素和轨道的投影权重，并限定搜索能量范围。
+2. 对各目标轨道对、k 点和自旋的非零投影分布求等尾分位区间，将其包络作为外窗口的基础范围。
+3. 在能量网格上选择覆盖该范围的外窗口，检查所提供的 SCF/DOS 各采样点内能态数均不少于 Wannier 函数数量；必要时扩大窗口，无可行解时报错。
+4. 在外窗口内搜索冻结窗口，检查目标轨道特征阈值、能态数量、自旋非空及边界余量约束，并优先选择目标投影权重较高的候选区间。
+5. 写入窗口参数和诊断信息；无可行冻结窗口时记录原因，保留外窗口。
+
+例如，可明确指定自适应方法和搜索约束：
+
+```bash
+crpa-workflow prepare-wannier --elements Si Si --orbitals s p \
+  --window-method adaptive --search-energy-range -20 20 \
+  --outer-coverage 0.8 --frozen-character-min 0.70 --frozen-margin 0.1
+```
+
+上述数值为参数示例。运行后应核对诊断文件中的外窗口和冻结窗口、各轨道对覆盖情况、限制能态数量的位置及警告，确认其对应所选物理子空间。投影权重用于轨道特征估计；窗口可行性检查针对已提供的 SCF/DOS 网格，仍需通过实际 Wannier 计算检查插值质量。
 
 准备后应查看：
 
@@ -380,6 +526,21 @@ crpa-workflow prepare-wannier --elements Si Si --orbitals s p
 04_wann/INCAR
 04_wann/wannier_window_diagnostics.json
 ```
+
+对于`adaptive`方法，诊断报告的主要字段及检查方式如下：
+
+| 字段 | 含义与检查方式 |
+| --- | --- |
+| `projection_pairs`、`num_wann` | 核对目标轨道配对和实际Wannier函数数量 |
+| `fermi_energy` | 用于相对与绝对能量换算的SCF费米能 |
+| `windows_relative.outer`、`windows_relative.frozen` | 相对费米能的外窗口、冻结窗口；单位eV |
+| `windows_absolute.outer`、`windows_absolute.frozen` | 对应写入Wannier输入的绝对能量边界；单位eV |
+| `outer_counts` | 检查所提供网格上外窗口内的能态数量限制 |
+| `coverage_by_pair` | 检查各目标轨道对的投影权重覆盖情况 |
+| `outer_only_reason` | 无可行冻结窗口时的原因；冻结窗口为`null`时不应填成0 eV |
+| `warnings`、`validation_scope` | 查看边界、能带范围或覆盖警告及验证范围 |
+
+可用`python -m json.tool 04_wann/wannier_window_diagnostics.json`在终端查看报告。核对`INCAR`中的`dis_win_min/max`和存在时的`dis_froz_min/max`与绝对窗口一致；不要把图中相对费米能的读数直接作为绝对输入。γ-Ce实例的核对结果见第4.4节。
 
 确认目标轨道、函数数量、窗口和输入设置后，再运行或提交：
 
@@ -397,7 +558,7 @@ crpa-workflow prepare-crpa --target-states 1-8
 crpa-workflow submit-crpa --job-name silicon
 ```
 
-`1-8` 仅用于本手册双原子 Si、s/p 子空间示例中推断出的八个 Wannier 函数。实际目标态范围应根据实际基组和物理问题选择。
+`1-8` 仅用于第3.5节初始化的双原子 Si、s/p 子空间示例中推断出的八个 Wannier 函数。实际目标态范围应根据实际基组和物理问题选择。
 
 不指定 `--target-states` 时，默认选择全部 Wannier 态。参数支持从 1 开始的单个编号和包含端点的编号范围，例如 `1-5 8 10-12`，所选编号必须在实际 Wannier 基组范围内。
 
@@ -431,6 +592,8 @@ crpa-workflow --config /path/to/workflow.conf batch \
   --dry-run --mode prepare /path/to/structures /path/to/calculations
 ```
 
+预演只列出目录映射，不创建计算目录。
+
 ### 8.2 准备与提交
 
 确认映射和配置后，先生成输入用于审阅：
@@ -444,7 +607,7 @@ crpa-workflow --config /path/to/workflow.conf batch \
 
 每个计算目录包含 POSCAR、配置副本、版本记录、生成的阶段目录，以及一个调用安装环境的 `workflow.sh` 启动脚本。这个按计算生成的脚本仍然有效，与已归档的旧根目录脚本不同。
 
-已有目录默认跳过。`--force` 用于刷新带有批量工作流标识的已有计算，但输入 POSCAR 已改变或没有批量所有权标识的目录仍会被跳过。批量运行会继续处理其他结构，最后输出成功、跳过和失败数量；只要有失败，命令就返回非零退出码。
+已有目录默认跳过。`--force` 用于刷新带有批量工作流标识的已有计算，但输入 POSCAR 已改变或没有批量所有权标识的目录仍会被跳过。批量运行会继续处理其他结构，最后输出已准备、已完成、跳过和失败数量；只要有失败，命令就返回非零退出码。
 
 如果先采用 `--mode prepare`，审阅后可进入各计算目录执行 `crpa-workflow submit`。再次对相同目录执行默认批量命令会跳过已有计算；使用 `--force` 会涉及重新生成文件，不应仅为提交已有作业而盲目使用。
 
@@ -520,32 +683,18 @@ crpa-workflow --config /path/to/workflow.conf batch \
 
 当前候选版本已通过记录在案的 Python 测试、模拟外部程序的 Bash 工作流测试、安装检查及合成数据绘图检查。这些测试没有运行真实 VASP/Wannier/cRPA 生产计算。
 
-随软件提供的硅 POSCAR 用于输入演示；绘图测试数据属于合成测试数据，不应作为真实材料计算结果引用。具体测试环境与范围见[验证记录（英文）](validation.md)，计算原理见[物理说明（英文）](physics_reference.md)。
+算例提供者于2026年9月15日确认γ-Ce全流程测试通过，使用VASP 6.5.1与VASPKIT 1.5.1；9月16日提供命令记录、配置、Wannier输入、选窗诊断及第4章三张结果图。已核对窗口端点与输入一致，并抄录cRPA截图中的结果。尚未核验完整计算日志、结构、收敛序列及测试版本对应关系，不将已有图示视为全能区插值误差或所有收敛条件达标的证明。
+
+随软件提供的硅 POSCAR 用于输入演示；绘图测试数据属于合成测试数据，不应作为真实材料计算结果引用。记录在案的自动化测试环境与范围见[验证记录（英文）](validation.md)，计算原理见[物理说明（英文）](physics_reference.md)。
+
+开展生产计算验证时，应保存完整算例的终端记录和图表，包括安装与版本、配置、准备、提交与状态、投影能带与态密度、Wannier 诊断及 cRPA 输出，同时记录集群、软件及构建版本和实际计算参数。
 
 ### 执行与恢复规则（2026年9月12日修复）
 
 生成的作业应在阶段目录中提交：`cd STAGE && sbatch job.sh`。Slurm 暂存脚本通过 `SLURM_SUBMIT_DIR` 定位阶段，并检查工作流标记；直接用 Bash 执行时按脚本所在目录定位。升级软件后须重新生成已有 job.sh，旧脚本不会自动更新。
 
-运行命令的 `--help` 只显示帮助，不启动计算；未知参数报错。环境初始化与运行命令在子 Shell 中使用 `set -euo pipefail`；初始化、普通命令或管道失败会中止后续命令。自定义脚本若显式处理或忽略错误，仍需自行保证返回状态正确。
+运行命令的 `--help` 只显示帮助，不启动计算；未知参数报错。环境初始化与运行命令在子登录 Shell 中使用 `set -euo pipefail`；初始化、普通命令或管道失败会中止后续命令。自定义脚本若显式处理或忽略错误，仍需自行保证返回状态正确。
 
 后处理使用配置中的 `VASPKIT_BIN`，命令行 `--vaspkit` 优先。Wannier 强制替换失败时恢复旧阶段；若文件系统同时阻止恢复，旧数据保留在准备临时目录的 `previous-04_wann` 中，恢复前不要删除。成功强制替换仍会移除旧 Wannier 输出。
 
-cRPA 准备支持 VASP 文档所述的文本 WANPROJ，不读取 HDF5 表示。程序核对维度、有效 NBANDS、OUTCAR 中存在的 NKPTS、k 点表、全部自旋/k 点块、矩阵索引覆盖和有限数值；不据此证明矩阵正交性、输入物理兼容性或计算收敛。格式依据：https://vasp.at/wiki/WANPROJ 。
-
-## 12. 软著材料完善说明
-
-本手册保留“候选版本”和“待审阅草稿”标记。正式申报前，由申请人确认软件的登记全称、著作权人、开发完成日期、最终版本号，以及所在单位的材料格式要求。
-
-建议从一个经确认可公开使用的完整计算案例中补充以下真实运行材料：
-
-| 材料 | 建议展示内容 |
-| --- | --- |
-| 安装与版本 | 安装完成信息及版本查询输出 |
-| 环境与配置 | 实际运行环境、必要软件版本和计算资源 |
-| 初始化与准备 | 输入结构、配置和生成的阶段目录 |
-| 作业管理 | 提交输出、状态查询及相应日志 |
-| 后处理 | 实际投影能带、态密度图及说明 |
-| Wannier | 窗口诊断、局域化和插值检查结果 |
-| cRPA | 完成标志及与软件功能对应的结果展示 |
-
-截图中的软件名称、版本以及相关叙述应与最终源码和申请材料一致。模拟测试输出须明确标注，不应用于冒充真实生产计算。源程序排版与提交材料准备说明见[软著材料准备说明（英文）](registration.md)。
+cRPA 准备支持 VASP 文档所述的空白分隔文本 WANPROJ，不读取 HDF5 表示。程序对照 INCAR／有效 OUTCAR NBANDS 核对维度，并检查 OUTCAR 中存在的 NKPTS、k 点表、全部自旋/k 点块、完整能带／轨道索引覆盖和有限数值；不据此证明矩阵正交性、输入物理兼容性或计算收敛。格式依据：[VASP WANPROJ 文档](https://vasp.at/wiki/WANPROJ)。
