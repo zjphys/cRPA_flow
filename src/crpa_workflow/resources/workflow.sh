@@ -10,7 +10,7 @@ Usage:
   crpa-workflow prepare [--force] [--no-relax]
                                       Generate all inputs from POSCAR
   crpa-workflow run                Run stages sequentially in this shell
-  crpa-workflow submit [--job-name PREFIX]
+  crpa-workflow submit [--job-name PREFIX] [--resubmit]
                                     Submit an afterok-linked Slurm pipeline
   crpa-workflow execute STAGE      Run one prepared stage directly
   crpa-workflow status             Show prepared/output state
@@ -18,12 +18,12 @@ Usage:
   crpa-workflow prepare-wannier --elements E... --orbitals O... [--num-bands N]
                                     Generate 04_wann after DOS/bands finish
   crpa-workflow run-wannier        Run only the prepared 04_wann stage
-  crpa-workflow submit-wannier [--job-name PREFIX]
+  crpa-workflow submit-wannier [--job-name PREFIX] [--resubmit]
                                     Submit only the prepared 04_wann stage
   crpa-workflow prepare-crpa [--target-states I...]
                                     Generate 05_crpa after 04_wann finishes
   crpa-workflow run-crpa           Run only the prepared 05_crpa stage
-  crpa-workflow submit-crpa [--job-name PREFIX]
+  crpa-workflow submit-crpa [--job-name PREFIX] [--resubmit]
                                     Submit only the prepared 05_crpa stage
 
 Only POSCAR is required as user-supplied scientific input. VASPKIT must be
@@ -44,6 +44,10 @@ Regenerate jobs after changing runtime commands, setup, resources, or headers.
 Submission commands accept "--job-name PREFIX" or "--job-name=PREFIX". The
 stage name is appended automatically, for example "--job-name Pu" submits
 Pu-relax, Pu-scf, Pu-dos, and Pu-band.
+Accepted jobs are recorded in .workflow-submissions. Repeating a submission
+reuses active/successful recorded jobs and submits only missing stages. This
+requires squeue/sacct access. Use --resubmit for a new run only after all
+recorded jobs have ended. Direct sbatch submissions are not tracked.
 
 After the DOS and band stages finish, run "crpa-workflow postprocess". VASPKIT
 tasks 213 and 113 generate element-projected band and DOS data. Plot
@@ -121,6 +125,8 @@ VASPKIT_BIN="${VASPKIT_BIN:-vaspkit}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 VASP_COMMAND="${VASP_COMMAND:-vasp_std}"
 SUBMIT_COMMAND="${SUBMIT_COMMAND:-sbatch}"
+SQUEUE_COMMAND="${SQUEUE_COMMAND:-squeue}"
+SACCT_COMMAND="${SACCT_COMMAND:-sacct}"
 KPR_RELAX="${KPR_RELAX:-0.05}"
 KPR_SCF="${KPR_SCF:-0.04}"
 KPR_DOS="${KPR_DOS:-0.03}"
@@ -283,7 +289,7 @@ doctor() {
   case "$mode" in
     prepare) required+=("$VASPKIT_BIN") ;;
     plot) required+=("$VASPKIT_BIN") ;;
-    submit) required+=("$SUBMIT_COMMAND") ;;
+    submit) required+=("$SUBMIT_COMMAND" "$SQUEUE_COMMAND" "$SACCT_COMMAND" flock sha256sum) ;;
     run) ;;
     *) die "Use doctor prepare|plot|submit|run." ;;
   esac
@@ -468,6 +474,21 @@ write_incar() {
     SBATCH_NODES "$SBATCH_NODES" > "$ROOT_DIR/$stage/INCAR"
 }
 
+strict_job_header() {
+  # Keep every Slurm directive before executable shell code, including set.
+  local line started=no
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$started" == no && ! "$line" =~ ^[[:space:]]*(#|$) ]]; then
+      printf '\nset -euo pipefail\n'
+      started=yes
+    elif [[ "$started" == yes && "$line" =~ ^[[:space:]]*#SBATCH ]]; then
+      die 'SBATCH_TEMPLATE has a Slurm directive after executable code; move all directives before runtime setup.'
+    fi
+    printf '%s\n' "$line"
+  done
+  [[ "$started" == yes ]] || printf '\nset -euo pipefail\n'
+}
+
 write_job() {
   local stage="$1" relax_enabled="${2:-no}" dir="$ROOT_DIR/$1" partition_line=""
   local job_partition="$SBATCH_PARTITION"
@@ -490,17 +511,17 @@ write_job() {
   fi
   [[ -n "$job_partition" ]] &&
     partition_line="#SBATCH --partition=$job_partition"
-  {
-    printf '%s\n' '#!/usr/bin/env bash'
-    render_template "$SBATCH_TEMPLATE" \
+  local header
+  header="$(render_template "$SBATCH_TEMPLATE" \
       JOB_NAME "${stage#*_}" \
       SBATCH_PARTITION_LINE "$partition_line" \
       SBATCH_NODES "$job_nodes" \
       SBATCH_NTASKS_PER_NODE "$job_ntasks_per_node" \
       SBATCH_CPUS_PER_TASK "$job_cpus_per_task" \
       SBATCH_TIME "$job_time" \
-      SBATCH_EXTRA "$job_extra"
-    printf '\nset -euo pipefail\n'
+      SBATCH_EXTRA "$job_extra" | strict_job_header)"
+  {
+    printf '%s\n' '#!/usr/bin/env bash' "$header"
     printf 'export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"\n'
     printf '%s\n' \
       'if [[ -n "${SLURM_JOB_ID:-}" ]]; then' \
@@ -538,7 +559,7 @@ write_job() {
         ;;
     esac
     printf '%s\n' 'cd "$job_dir"'
-    printf 'exec bash -lc %q\n' $'set -euo pipefail\n'"$job_command"
+    printf 'exec bash -c %q\n' $'set -euo pipefail\n'"$job_command"
   } > "$dir/job.sh"
   chmod +x "$dir/job.sh"
 }
@@ -693,7 +714,7 @@ execute_stage() {
   if [[ -n "$EXECUTION_SETUP" ]]; then
     command="$EXECUTION_SETUP"$'\n'"$command"
   fi
-  (cd "$ROOT_DIR/$stage" && bash -lc $'set -euo pipefail\n'"$command")
+  (cd "$ROOT_DIR/$stage" && bash -c $'set -euo pipefail\n'"$command")
 }
 
 run_all() {
@@ -726,11 +747,12 @@ submit_stage_job() {
     submit_directory="$(cd "$(dirname "$submit_command")" && pwd)"
     submit_command="$submit_directory/$(basename "$submit_command")"
   fi
-  (cd "$ROOT_DIR/$stage" && "$submit_command" "${submit_options[@]}" "$@" job.sh)
+  (cd "$ROOT_DIR/$stage" && "$submit_command" "${submit_options[@]}" "$@" job.sh 9>&-)
 }
 
 parse_submit_options() {
   SUBMIT_JOB_PREFIX=""
+  SUBMIT_AGAIN=no
   while (( $# )); do
     case "$1" in
       --job-name)
@@ -745,71 +767,188 @@ parse_submit_options() {
           die "--job-name requires a non-empty prefix."
         shift
         ;;
+      --resubmit)
+        SUBMIT_AGAIN=yes
+        shift
+        ;;
       *)
-        die "Unknown submit option '$1'. Use --job-name PREFIX."
+        die "Unknown submit option '$1'. Use --job-name PREFIX or --resubmit."
         ;;
     esac
   done
 }
 
-submit_all() {
-  parse_submit_options "$@"
-  command -v "$SUBMIT_COMMAND" >/dev/null 2>&1 ||
-    die "Submission command '$SUBMIT_COMMAND' is unavailable."
-  is_enabled 01_scf || die "SCF stage is not prepared. Run prepare first."
+read_submission() {
+  local record="$1" extra
+  IFS='|' read -r SAVED_ID SAVED_CLUSTER SAVED_HASH SAVED_DEP extra < "$record" ||
+    die "Invalid submission record: $record"
+  [[ "$SAVED_ID" =~ ^[0-9]+$ && "$SAVED_CLUSTER" =~ ^[A-Za-z0-9_.-]+$ &&
+     "$SAVED_HASH" =~ ^[0-9a-f]{64}$ && "$SAVED_DEP" =~ ^(-|[0-9]+)$ && -z "$extra" ]] ||
+    die "Invalid submission record: $record"
+}
 
-  local output relax_id scf_id stage job_id
-  if is_enabled 00_relax; then
-    output="$(submit_stage_job 00_relax)"
-    relax_id="${output%%;*}"
-    [[ "$relax_id" =~ ^[0-9]+$ ]] || die "Could not parse job ID from: $output"
-    info "Submitted 00_relax as job $relax_id"
-    output="$(submit_stage_job 01_scf --dependency="afterok:$relax_id")"
+submission_state() {
+  local job_id="$1" cluster="$2" output state
+  local -a cluster_args=()
+  [[ "$cluster" == - ]] || cluster_args=(--clusters="$cluster")
+  # Accounting may lag; prefer the live queue, then an exact allocation record.
+  if output="$("$SQUEUE_COMMAND" "${cluster_args[@]}" --noheader --jobs="$job_id" --format=%T 2>/dev/null)" && [[ -n "$output" ]]; then
+    state="$(printf '%s\n' "$output" | awk 'NF {print $1; exit}')"
   else
-    output="$(submit_stage_job 01_scf)"
+    output="$("$SACCT_COMMAND" "${cluster_args[@]}" --noheader --allocations --parsable2 --jobs="$job_id" --format=JobIDRaw,State 2>/dev/null)" ||
+      die "Cannot query job $job_id. Check squeue/sacct before retrying; no new jobs were submitted."
+    state="$(printf '%s\n' "$output" | awk -F '|' -v id="$job_id" '$1 == id {split($2, s, /[ +]/); print s[1]; exit}')"
   fi
-  scf_id="${output%%;*}"
-  [[ "$scf_id" =~ ^[0-9]+$ ]] || die "Could not parse job ID from: $output"
-  info "Submitted 01_scf as job $scf_id"
+  [[ -n "$state" ]] || die "State of job $job_id is unknown; refusing to risk a duplicate submission."
+  printf '%s\n' "$state"
+}
 
-  # DOS and band calculations are independent children of the SCF calculation.
-  for stage in 02_dos 03_band; do
-    is_enabled "$stage" || continue
-    output="$(submit_stage_job "$stage" --dependency="afterok:$scf_id")"
-    job_id="${output%%;*}"
-    [[ "$job_id" =~ ^[0-9]+$ ]] || die "Could not parse job ID from: $output"
+terminal_state() {
+  case "$1" in
+    COMPLETED|FAILED|CANCELLED|TIMEOUT|NODE_FAIL|OUT_OF_MEMORY|BOOT_FAIL|DEADLINE|PREEMPTED|REVOKED) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+submit_selected() (
+  # A case-wide lock covers preflight, scheduler calls, and durable job records.
+  local tool stage record state output job_id cluster dependency hash archive submit_status
+  local ledger="$ROOT_DIR/.workflow-submissions"
+  local -A ids=() clusters=() hashes=() states=()
+  local -a options=()
+  for tool in "$SUBMIT_COMMAND" flock sha256sum; do
+    command -v "$tool" >/dev/null 2>&1 || die "Required submission command '$tool' is unavailable."
+  done
+  exec 9> "$ROOT_DIR/.workflow-submit.lock"
+  flock -n 9 || die 'Another submission is in progress for this calculation.'
+  mkdir -p "$ledger"
+  for record in "$ledger"/*.pending; do
+    [[ -e "$record" ]] || continue
+    die "An interrupted or ambiguous submission is recorded in $record. Check Slurm and reconcile that record before retrying."
+  done
+
+  # Validate every selected script before the first scheduler mutation.
+  for stage in "$@"; do
+    [[ -f "$ROOT_DIR/$stage/$MARKER" && -s "$ROOT_DIR/$stage/job.sh" ]] ||
+      die "$stage/job.sh or its ownership marker is missing; prepare the stage first."
+    bash -n "$ROOT_DIR/$stage/job.sh" || die "Invalid shell syntax in $stage/job.sh."
+    hash="$(sha256sum "$ROOT_DIR/$stage/job.sh")"
+    hashes[$stage]="${hash%% *}"
+  done
+
+  # A fresh run must not overwrite inputs/outputs still used by any tracked job.
+  if [[ "$SUBMIT_AGAIN" == yes ]]; then
+    for record in "$ledger"/*.record; do
+      [[ -e "$record" ]] || continue
+      read_submission "$record"
+      state="$(submission_state "$SAVED_ID" "$SAVED_CLUSTER")"
+      terminal_state "$state" || die "Job $SAVED_ID is $state; --resubmit requires all recorded jobs to have ended."
+    done
+  fi
+
+  for stage in "$@"; do
+    dependency=-
+    case "$stage" in
+      01_scf) if is_enabled 00_relax; then dependency="${ids[00_relax]:-unsubmitted}"; fi ;;
+      02_dos|03_band) dependency="${ids[01_scf]:-unsubmitted}" ;;
+    esac
+    record="$ledger/$stage.record"
+    if [[ -f "$record" && "$SUBMIT_AGAIN" == no ]]; then
+      read_submission "$record"
+      [[ "$SAVED_HASH" == "${hashes[$stage]}" && "$SAVED_DEP" == "$dependency" ]] ||
+        die "$stage script or dependency differs from its submitted version; inspect old jobs and use --resubmit after they end."
+      state="$(submission_state "$SAVED_ID" "$SAVED_CLUSTER")"
+      if terminal_state "$state" && [[ "$state" != COMPLETED ]]; then
+        die "$stage job $SAVED_ID ended as $state; inspect the failure and use --resubmit after all recorded jobs end."
+      fi
+      # Reuse only recognized states; unexpected responses are not evidence of safety.
+      case "$state" in
+        PENDING|RUNNING|CONFIGURING|COMPLETING|SUSPENDED|RESIZING|REQUEUED|REQUEUE_FED|REQUEUE_HOLD|SIGNALING|STAGE_OUT|STOPPED|COMPLETED) ;;
+        *) die "Cannot safely reuse $stage job $SAVED_ID in state $state." ;;
+      esac
+      ids[$stage]="$SAVED_ID"
+      clusters[$stage]="$SAVED_CLUSTER"
+      states[$stage]="$state"
+    fi
+  done
+
+  if [[ "$SUBMIT_AGAIN" == yes ]]; then
+    archive="$(mktemp -d "$ledger/history.XXXXXX")"
+    for stage in "$@"; do
+      [[ ! -f "$ledger/$stage.record" ]] || mv -- "$ledger/$stage.record" "$archive/"
+    done
+  fi
+
+  for stage in "$@"; do
+    if [[ -n "${ids[$stage]:-}" ]]; then
+      info "Reusing $stage job ${ids[$stage]} (job name is unchanged)"
+      continue
+    fi
+    dependency=-
+    cluster=-
+    state=PENDING
+    case "$stage" in
+      01_scf)
+        if is_enabled 00_relax; then
+          dependency="${ids[00_relax]}"; cluster="${clusters[00_relax]}"; state="${states[00_relax]}"
+        fi ;;
+      02_dos|03_band)
+        dependency="${ids[01_scf]}"; cluster="${clusters[01_scf]}"; state="${states[01_scf]}" ;;
+    esac
+    options=()
+    # Completed parents may have aged out of the controller's MinJobAge window.
+    # Keep their provenance in the record, but do not add an obsolete dependency.
+    [[ "$dependency" == - || "$state" == COMPLETED ]] || options+=(--dependency="afterok:$dependency")
+    [[ "$cluster" == - ]] || options+=(--clusters="$cluster")
+    # Leave evidence if interrupted after sbatch accepts a job but before recording it.
+    printf '%s\n' "Submitting $stage; inspect Slurm before removing this file." > "$ledger/$stage.pending"
+    if output="$(submit_stage_job "$stage" "${options[@]}")"; then
+      printf '%s\n' "$output" >> "$ledger/$stage.pending"
+    else
+      submit_status=$?
+      if [[ -n "$output" || "$submit_status" -ge 128 ]]; then
+        printf 'Exit status: %s\n%s\n' "$submit_status" "$output" >> "$ledger/$stage.pending"
+        die "Submission of $stage returned an ambiguous failure; inspect Slurm and $ledger/$stage.pending before retrying."
+      fi
+      rm -f -- "$ledger/$stage.pending"
+      die "Submission of $stage failed. Earlier accepted jobs are recorded; rerun this command to resume."
+    fi
+    [[ "$output" =~ ^([0-9]+)(\;([A-Za-z0-9_.-]+))?$ ]] ||
+      die "Could not parse job ID from: $output. Submission may have succeeded; inspect $ledger/$stage.pending."
+    job_id="${BASH_REMATCH[1]}"
+    cluster="${BASH_REMATCH[3]:--}"
+    record="$ledger/$stage.record"
+    printf '%s|%s|%s|%s\n' "$job_id" "$cluster" "${hashes[$stage]}" "$dependency" > "$record.tmp"
+    mv -- "$record.tmp" "$record"
+    rm -- "$ledger/$stage.pending"
+    ids[$stage]="$job_id"
+    clusters[$stage]="$cluster"
+    states[$stage]=PENDING
     info "Submitted $stage as job $job_id"
   done
+)
+
+submit_all() {
+  parse_submit_options "$@"
+  is_enabled 01_scf || die "SCF stage is not prepared. Run prepare first."
+  local stage
+  local -a selected=()
+  for stage in 00_relax 01_scf 02_dos 03_band; do
+    is_enabled "$stage" && selected+=("$stage")
+  done
+  submit_selected "${selected[@]}"
 }
 
 submit_wannier() {
   parse_submit_options "$@"
-  command -v "$SUBMIT_COMMAND" >/dev/null 2>&1 ||
-    die "Submission command '$SUBMIT_COMMAND' is unavailable."
   is_enabled 04_wann || die "04_wann is not prepared. Run prepare-wannier first."
-  [[ -s "$ROOT_DIR/04_wann/job.sh" ]] ||
-    die "04_wann/job.sh is missing. Run prepare-wannier again."
-
-  local output job_id
-  output="$(submit_stage_job 04_wann)"
-  job_id="${output%%;*}"
-  [[ "$job_id" =~ ^[0-9]+$ ]] || die "Could not parse job ID from: $output"
-  info "Submitted 04_wann as job $job_id"
+  submit_selected 04_wann
 }
 
 submit_crpa() {
   parse_submit_options "$@"
-  command -v "$SUBMIT_COMMAND" >/dev/null 2>&1 ||
-    die "Submission command '$SUBMIT_COMMAND' is unavailable."
   is_enabled 05_crpa || die "05_crpa is not prepared. Run prepare-crpa first."
-  [[ -s "$ROOT_DIR/05_crpa/job.sh" ]] ||
-    die "05_crpa/job.sh is missing. Run prepare-crpa again."
-
-  local output job_id
-  output="$(submit_stage_job 05_crpa)"
-  job_id="${output%%;*}"
-  [[ "$job_id" =~ ^[0-9]+$ ]] || die "Could not parse job ID from: $output"
-  info "Submitted 05_crpa as job $job_id"
+  submit_selected 05_crpa
 }
 
 status() {

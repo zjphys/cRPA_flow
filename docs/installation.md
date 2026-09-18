@@ -1,4 +1,4 @@
-# Installation and first use — 1.0.0
+# Installation and first use — 1.1.0
 
 ## Supported environment
 
@@ -21,8 +21,8 @@ pip with `--python` support for the convenience installer.
 Extract the complete source release. From its directory:
 
 ```bash
-bash install.sh "$HOME/.local/share/crpa-workflow/1.0.0"
-source "$HOME/.local/share/crpa-workflow/1.0.0/bin/activate"
+bash install.sh "$HOME/.local/share/crpa-workflow/1.1.0"
+source "$HOME/.local/share/crpa-workflow/1.1.0/bin/activate"
 crpa-workflow --version
 ```
 
@@ -51,7 +51,7 @@ python -m pip wheel '.[plot]' 'setuptools>=68' -w wheelhouse
 Transfer `wheelhouse` to the cluster. In a Python environment that already has pip:
 
 ```bash
-python -m pip install --no-index --find-links wheelhouse 'crpa-workflow[plot]==1.0.0'
+python -m pip install --no-index --find-links wheelhouse 'crpa-workflow[plot]==1.1.0'
 ```
 
 For source installation with `install.sh`, the matching wheelhouse can instead be
@@ -108,6 +108,11 @@ the current configuration; already generated files retain their captured command
 Do not regenerate running calculations. Review `--force` carefully because it
 rewrites workflow-owned input files and job scripts.
 
+Submission reliability updates require existing job scripts to be regenerated
+or manually updated after running jobs finish; upgrading the package alone does
+not replace their captured `bash -lc` command. See [environment setup and
+submission recovery](quickstart.md#submission-retries-and-environment-setup).
+
 ## Command-name migration
 
 The former `vasp-workflow` / `vasp-workflow-batch` commands are now
@@ -120,7 +125,8 @@ changes. The old distribution (`vasp-scf-crpa-workflow`) is a different pip pack
 installing the renamed one does not automatically remove it. This release does not
 provide the old commands as aliases.
 
-Existing calculation directories and generated `job.sh` files need no changes.
+The command-name migration alone requires no changes to calculation directories
+or generated `job.sh` files; adopting later runtime fixes is a separate step.
 Old batch launchers refer to `vasp_workflow`; retain their old installation, or use
 `crpa-workflow --root /path/to/case COMMAND` from the new environment. Newly generated
 batch launchers use `crpa_workflow`. No regeneration of scientific inputs is needed

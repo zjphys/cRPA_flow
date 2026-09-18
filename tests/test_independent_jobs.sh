@@ -53,10 +53,13 @@ printf '%s|%s\n' "$PWD" "$*" >> "$(dirname "$0")/submit-calls"
 printf '12345\n'
 EOF
 chmod +x "$TEST_DIR/mock_sbatch"
+printf '#!/usr/bin/env bash\nprintf "COMPLETED\\n"\n' > "$TEST_DIR/mock_squeue"
+chmod +x "$TEST_DIR/mock_squeue"
 
 cat > "$CASE_DIR/workflow.conf" <<EOF
 VASPKIT_BIN="$TEST_DIR/mockbin/vaspkit"
 SUBMIT_COMMAND="../mock_sbatch"
+SQUEUE_COMMAND="$TEST_DIR/mock_squeue"
 RUN_RELAX=yes
 EXECUTION_SETUP='export SETUP_VALUE=ready'
 declare -A STAGE_COMMANDS=(
@@ -88,7 +91,7 @@ grep -Fx "$CASE_DIR/03_band|--parsable --dependency=afterok:12345 job.sh" "$TEST
 : > "$TEST_DIR/submit-calls"
 (
   cd "$CASE_DIR"
-  ./workflow.sh submit --job-name Pu
+  ./workflow.sh submit --resubmit --job-name Pu
 )
 grep -Fx "$CASE_DIR/00_relax|--parsable --job-name=Pu-relax job.sh" "$TEST_DIR/submit-calls"
 grep -Fx "$CASE_DIR/01_scf|--parsable --job-name=Pu-scf --dependency=afterok:12345 job.sh" "$TEST_DIR/submit-calls"
@@ -98,7 +101,7 @@ grep -Fx "$CASE_DIR/03_band|--parsable --job-name=Pu-band --dependency=afterok:1
 : > "$TEST_DIR/submit-calls"
 (
   cd "$CASE_DIR"
-  ./workflow.sh submit --job-name=Am
+  ./workflow.sh submit --resubmit --job-name=Am
 )
 grep -Fx "$CASE_DIR/01_scf|--parsable --job-name=Am-scf --dependency=afterok:12345 job.sh" "$TEST_DIR/submit-calls"
 

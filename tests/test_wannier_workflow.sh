@@ -39,11 +39,14 @@ pwd > "$(dirname "$0")/submit-working-directory"
 printf '12345\n'
 EOF
 chmod +x "$TEST_DIR/mock_sbatch"
+printf '#!/usr/bin/env bash\nprintf "COMPLETED\\n"\n' > "$TEST_DIR/mock_squeue"
+chmod +x "$TEST_DIR/mock_squeue"
 
 cat > "$TEST_DIR/workflow.conf" <<EOF
 PYTHON_BIN="bash"
 VASPKIT_BIN="mock-vaspkit"
 SUBMIT_COMMAND="$TEST_DIR/mock_sbatch"
+SQUEUE_COMMAND="$TEST_DIR/mock_squeue"
 KPR_WANN=0.06
 EXECUTION_SETUP='printf "tasks=%s\\n" "\${SLURM_NTASKS:-missing}" > setup-ran'
 declare -A STAGE_COMMANDS=(
@@ -106,7 +109,7 @@ grep -Fx -- '--parsable' "$TEST_DIR/submit-arguments"
 grep -Fx 'job.sh' "$TEST_DIR/submit-arguments"
 test "$(cat "$TEST_DIR/submit-working-directory")" = "$TEST_DIR/04_wann"
 
-"$TEST_DIR/workflow.sh" submit-wannier --job-name=Pu
+"$TEST_DIR/workflow.sh" submit-wannier --resubmit --job-name=Pu
 grep -Fx -- '--job-name=Pu-wann' "$TEST_DIR/submit-arguments"
 grep -Fx 'job.sh' "$TEST_DIR/submit-arguments"
 

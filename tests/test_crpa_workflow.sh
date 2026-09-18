@@ -52,10 +52,13 @@ pwd > "$(dirname "$0")/submit-working-directory"
 printf '24680\n'
 EOF
 chmod +x "$TEST_DIR/mock_sbatch"
+printf '#!/usr/bin/env bash\nprintf "COMPLETED\\n"\n' > "$TEST_DIR/mock_squeue"
+chmod +x "$TEST_DIR/mock_squeue"
 
 cat > "$TEST_DIR/workflow.conf" <<EOF
 PYTHON_BIN="python3"
 SUBMIT_COMMAND="$TEST_DIR/mock_sbatch"
+SQUEUE_COMMAND="$TEST_DIR/mock_squeue"
 declare -A STAGE_COMMANDS=(
   [default]='printf "ran 05_crpa\\n" > executed'
 )
@@ -114,7 +117,7 @@ grep -Fx 'job.sh' "$TEST_DIR/submit-arguments"
 test "$(cat "$TEST_DIR/submit-working-directory")" = "$TEST_DIR/05_crpa"
 ! grep -q -- '--dependency' "$TEST_DIR/submit-arguments"
 
-"$TEST_DIR/workflow.sh" submit-crpa --job-name Pu
+"$TEST_DIR/workflow.sh" submit-crpa --resubmit --job-name Pu
 grep -Fx -- '--job-name=Pu-crpa' "$TEST_DIR/submit-arguments"
 grep -Fx 'job.sh' "$TEST_DIR/submit-arguments"
 ! grep -q -- '--dependency' "$TEST_DIR/submit-arguments"

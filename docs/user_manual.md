@@ -1,6 +1,6 @@
 # Automatic Wannier Energy Window Selection and cRPA Workflow Software — User Manual
 
-**Software version:** V1.0.0 (candidate; technical project: crpa-workflow 1.0.0)\
+**Software version:** V1.1.0 (candidate; technical project: crpa-workflow 1.1.0)\
 **Document status:** Draft for review\
 **Document updated:** 2026-09-17\
 **Intended audience:** Researchers running VASP calculations on Linux workstations or high-performance computing clusters
@@ -95,12 +95,12 @@ The case provider reported testing the example on a remote Linux cluster with VA
 Extract the complete source distribution and run from the directory containing `install.sh`:
 
 ```bash
-bash install.sh "$HOME/.local/share/crpa-workflow/1.0.0"
-source "$HOME/.local/share/crpa-workflow/1.0.0/bin/activate"
+bash install.sh "$HOME/.local/share/crpa-workflow/1.1.0"
+source "$HOME/.local/share/crpa-workflow/1.1.0/bin/activate"
 crpa-workflow --version
 ```
 
-The last command normally prints `crpa-workflow 1.0.0`. The installer places the software and plotting dependencies in the specified Python virtual environment. It requires no administrator privileges and does not modify shell startup files.
+The last command normally prints `crpa-workflow 1.1.0`. The installer places the software and plotting dependencies in the specified Python virtual environment. It requires no administrator privileges and does not modify shell startup files.
 
 The installer refuses to overwrite an existing target directory. Use a new directory when upgrading and retain the old environment for batch launchers that reference it. Activate the environment in each new terminal, or invoke the installed command by its absolute path.
 
@@ -138,7 +138,7 @@ Copy `wheelhouse` to the cluster and run in a Python environment that already ha
 
 ```bash
 python -m pip install --no-index --find-links wheelhouse \
-  'crpa-workflow[plot]==1.0.0'
+  'crpa-workflow[plot]==1.1.0'
 ```
 
 If the cluster's Python lacks installation components, select an appropriate cluster-provided Python environment first. See the [installation guide](installation.md) for details.
@@ -422,6 +422,12 @@ crpa-workflow --root /path/to/case --config /path/to/custom.conf prepare
 
 `submit`, `submit-wannier` and `submit-crpa` accept both `--job-name PREFIX` and `--job-name=PREFIX`. The software appends the corresponding stage identifier to the name.
 
+Submission retries reuse recorded active or successfully completed jobs after
+checking `squeue`/`sacct`, and submit only missing stages. Use `--resubmit` for a
+deliberate new run after all tracked jobs have ended. Unknown job states or
+ambiguous submission results block retries. Direct `sbatch` and jobs submitted
+before this update are not tracked. See [submission recovery and migration](quickstart.md#submission-retries-and-environment-setup).
+
 Each generated `job.sh` is self-contained and can be submitted from its stage directory:
 
 ```bash
@@ -607,9 +613,9 @@ Batch mode defaults to `submit`, which prepares and submits calculations. `--mod
 
 Each case contains POSCAR, a configuration copy, version metadata, generated stages and a `workflow.sh` launcher that invokes the installation. This generated per-case launcher remains supported and is distinct from the archived former root script.
 
-Existing cases are skipped by default. `--force` refreshes cases with the batch ownership marker, but cases with a changed POSCAR or no marker are still skipped. Processing continues after individual failures. The final summary reports prepared, completed, skipped and failed counts; any failure produces a nonzero exit status.
+Existing cases are skipped successfully only when `.batch-workflow-state` records completion of the requested operation. Incomplete or legacy cases count as failures. `--force` refreshes batch-owned cases without submission records; changed POSCARs, missing ownership markers, and tracked submissions are refused. Processing continues after individual failures. The final summary reports prepared, completed, skipped and failed counts; any failure produces a nonzero exit status. A completed submit operation means jobs were accepted, not that the calculations finished.
 
-After `--mode prepare`, enter each reviewed case and use `crpa-workflow submit`. Repeating the default batch command skips existing cases; `--force` regenerates files and should not be used merely to submit already prepared jobs.
+After `--mode prepare`, enter each reviewed case and use `crpa-workflow submit`. Repeating the default batch submit command reports prepared-but-unsubmitted cases as incomplete; `--force` should not be used merely to submit already prepared jobs.
 
 Batch launchers point to the installation that created them. Retain that installation, or activate another explicit version and manage the case using commands such as `crpa-workflow --root /path/to/case status`.
 
@@ -693,7 +699,7 @@ For production validation, retain terminal captures and plots from a completed c
 
 Submit generated jobs from their stage directory: `cd STAGE && sbatch job.sh`. Slurm-spooled scripts locate the stage using `SLURM_SUBMIT_DIR` and check the workflow ownership marker; direct Bash execution resolves the script location. Regenerate existing job scripts after upgrading to obtain these fixes; old scripts do not update automatically.
 
-Execution-command `--help` only displays help and does not start a calculation; unknown arguments are rejected. Environment setup and execution commands run with `set -euo pipefail` in a child login shell. A failed setup, simple command or pipeline stops subsequent commands. Custom code that explicitly handles or ignores errors remains responsible for correct exit status.
+Execution-command `--help` only displays help and does not start a calculation; unknown arguments are rejected. Environment setup and execution commands run with `set -euo pipefail` in a child non-login shell. Put explicit environment loading in `EXECUTION_SETUP`. Legacy setup in `SBATCH_TEMPLATE` is also checked, and all Slurm directives must precede executable code. A failed setup, simple command or pipeline stops subsequent commands. Custom code that explicitly handles or ignores errors remains responsible for correct exit status.
 
 Postprocessing uses configured `VASPKIT_BIN`, with command-line `--vaspkit` taking precedence. Failed forced Wannier replacement restores the previous stage. If filesystem errors also prevent rollback, the previous data remain in `previous-04_wann` within the preparation temporary directory; do not delete them before recovery. Successful forced replacement still discards old Wannier outputs.
 

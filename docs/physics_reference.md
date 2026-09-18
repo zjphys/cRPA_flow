@@ -1,4 +1,4 @@
-# SCF-to-cRPA physics reference — 1.0.0
+# SCF-to-cRPA physics reference — 1.1.0
 
 ## 1. Physical objective
 

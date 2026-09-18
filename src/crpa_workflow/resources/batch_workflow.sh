@@ -36,7 +36,8 @@ Options:
   -h, --help                         Show this help
 
 CALCULATION_DIR defaults to a "calculations" directory next to STRUCTURE_DIR.
-Existing calculation directories are skipped unless --force is supplied.
+Completed batch operations are skipped unless --force is supplied. Existing
+incomplete or untracked operations are reported as failures, not successful skips.
 EOF
 }
 
@@ -181,6 +182,11 @@ completed=0
 skipped=0
 failed=0
 
+record_batch_state() {
+  printf '%s\n' "$1" > "$destination/.batch-workflow-state.tmp"
+  mv -- "$destination/.batch-workflow-state.tmp" "$destination/.batch-workflow-state"
+}
+
 for i in "${!POSCARS[@]}"; do
   poscar="${POSCARS[$i]}"
   name="${CASE_NAMES[$i]}"
@@ -197,8 +203,23 @@ for i in "${!POSCARS[@]}"; do
     continue
   fi
   if [[ -d "$destination" && "$FORCE" != "yes" ]]; then
-    warn "$name: calculation already exists; skipped (use --force to refresh)."
-    ((skipped+=1))
+    previous_state="$(cat "$destination/.batch-workflow-state" 2>/dev/null || true)"
+    case "$MODE:$previous_state" in
+      prepare:prepared|prepare:submitted|prepare:ran|submit:submitted|run:ran)
+        warn "$name: requested batch operation was already completed; skipped."
+        ((skipped+=1))
+        ;;
+      *)
+        warn "$name: existing batch operation is incomplete or untracked (state=${previous_state:-unknown}). Inspect the case; resume submit/run there, or use --force for preparation only after checking existing jobs."
+        ((failed+=1))
+        ;;
+    esac
+    continue
+  fi
+  if [[ "$FORCE" == yes && -d "$destination/.workflow-submissions" ]] &&
+      find "$destination/.workflow-submissions" -maxdepth 1 -type f \( -name '*.record' -o -name '*.pending' \) -print -quit | grep -q .; then
+    warn "$name: submission records exist; refusing to regenerate a submitted case. Resume submission from that case instead."
+    ((failed+=1))
     continue
   fi
   if [[ -s "$destination/POSCAR" ]] && ! cmp -s "$poscar" "$destination/POSCAR"; then
@@ -209,6 +230,7 @@ for i in "${!POSCARS[@]}"; do
 
   mkdir -p "$destination" || { warn "$name: could not create destination."; ((failed+=1)); continue; }
   : > "$destination/$MARKER"
+  record_batch_state preparing
   if ! copy_workflow_files "$destination"; then
     warn "$name: failed to copy workflow files."
     ((failed+=1))
@@ -231,6 +253,7 @@ for i in "${!POSCARS[@]}"; do
     continue
   fi
   ((prepared+=1))
+  record_batch_state prepared
 
   if [[ "$MODE" == "prepare" ]]; then
     ((completed+=1))
@@ -239,6 +262,7 @@ for i in "${!POSCARS[@]}"; do
 
   info "$name: $MODE"
   if (cd "$destination" && bash ./workflow.sh "$MODE"); then
+    if [[ "$MODE" == submit ]]; then record_batch_state submitted; else record_batch_state ran; fi
     ((completed+=1))
   else
     warn "$name: $MODE failed; continuing with the next structure."

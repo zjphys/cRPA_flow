@@ -33,10 +33,14 @@ printf '%s\n' "$*" >> "$SUBMISSION_LOG"
 printf '12345\n'
 EOF
 chmod +x "$test_root/mockbin/vaspkit" "$test_root/mockbin/sbatch"
+for query in squeue sacct; do
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$test_root/mockbin/$query"
+  chmod +x "$test_root/mockbin/$query"
+done
 export PATH="$test_root/mockbin:$PATH"
 export SUBMISSION_LOG="$test_root/submissions"
 cd "$test_root"
-"$workflow" --version | grep -Fx 'crpa-workflow 1.0.0'
+"$workflow" --version | grep -Fx 'crpa-workflow 1.1.0'
 test -x "$(dirname "$workflow")/crpa-workflow-batch"
 "$(dirname "$workflow")/crpa-workflow-batch" --help
 "$workflow" --help

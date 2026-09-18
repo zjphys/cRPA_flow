@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.0 — submission reliability
+
+- Use non-login shells for generated jobs and direct stage execution.
+- Check legacy job-header setup failures without placing executable code before
+  Slurm directives; reject directives that follow executable header code.
+- Preflight every selected job, serialize submissions per case, and persist job
+  IDs, clusters, script hashes and dependencies. Retry by reusing verified active
+  or successful jobs; add `--resubmit` for a new run after tracked jobs end.
+- Preserve ambiguous submission evidence and refuse retries when scheduler state
+  cannot be verified. Direct `sbatch` submissions remain outside this tracking.
+- Track batch preparation/submission progress so incomplete cases cannot become
+  successful skips; prevent forced batch regeneration of tracked submissions.
+
 ## 1.0.0 — initial release candidate
 
 - Fix Slurm spool-copy stage discovery and non-executing command help.

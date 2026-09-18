@@ -1,6 +1,6 @@
 # Wannier能量窗口自动确定与cRPA计算全流程控制软件 用户手册
 
-**软件版本：** V1.0.0（候选版本；技术项目：crpa-workflow 1.0.0）\
+**软件版本：** V1.1.0（候选版本；技术项目：crpa-workflow 1.1.0）\
 **文档状态：** 待审阅草稿\
 **文档更新日期：** 2026年9月17日\
 **适用对象：** 在 Linux 工作站或高性能计算集群上开展 VASP 计算的科研人员
@@ -95,12 +95,12 @@ flowchart LR
 解压完整源码发布包，在包含 `install.sh` 的目录中执行：
 
 ```bash
-bash install.sh "$HOME/.local/share/crpa-workflow/1.0.0"
-source "$HOME/.local/share/crpa-workflow/1.0.0/bin/activate"
+bash install.sh "$HOME/.local/share/crpa-workflow/1.1.0"
+source "$HOME/.local/share/crpa-workflow/1.1.0/bin/activate"
 crpa-workflow --version
 ```
 
-正常情况下，最后一条命令显示 `crpa-workflow 1.0.0`。安装脚本将软件及绘图依赖安装到指定的 Python 虚拟环境，不需要管理员权限，也不会自动修改 Shell 启动文件。
+正常情况下，最后一条命令显示 `crpa-workflow 1.1.0`。安装脚本将软件及绘图依赖安装到指定的 Python 虚拟环境，不需要管理员权限，也不会自动修改 Shell 启动文件。
 
 如果目标目录已存在，安装脚本会拒绝覆盖。升级时建议指定新的安装目录，并保留旧环境，以便已生成的批量计算启动脚本继续使用原有环境。每次打开新终端后，应重新激活环境，或使用安装目录下命令的绝对路径。
 
@@ -138,7 +138,7 @@ python -m pip wheel '.[plot]' 'setuptools>=68' -w wheelhouse
 
 ```bash
 python -m pip install --no-index --find-links wheelhouse \
-  'crpa-workflow[plot]==1.0.0'
+  'crpa-workflow[plot]==1.1.0'
 ```
 
 如果集群 Python 缺少安装所需组件，应先选择集群提供的适当 Python 环境。更多说明见[安装指南（英文）](installation.md)。
@@ -422,6 +422,8 @@ crpa-workflow --root /path/to/case --config /path/to/custom.conf prepare
 
 `submit`、`submit-wannier` 和 `submit-crpa` 支持 `--job-name PREFIX`，也支持 `--job-name=PREFIX`。软件会为名称追加对应阶段标识。
 
+重复提交会查询 `squeue`/`sacct`，复用已记录且仍有效的排队、运行或成功完成作业，仅补交缺失阶段。需要重新计算时使用 `--resubmit`，前提是本算例所有已记录作业均已结束。状态未知或提交结果不明确时会停止提交。直接使用 `sbatch` 或更新前提交的作业不在追踪范围内。详见[提交恢复与迁移说明](quickstart.md#submission-retries-and-environment-setup)。
+
 生成的各阶段 `job.sh` 为独立脚本，可在对应目录中直接提交：
 
 ```bash
@@ -607,9 +609,9 @@ crpa-workflow --config /path/to/workflow.conf batch \
 
 每个计算目录包含 POSCAR、配置副本、版本记录、生成的阶段目录，以及一个调用安装环境的 `workflow.sh` 启动脚本。这个按计算生成的脚本仍然有效，与已归档的旧根目录脚本不同。
 
-已有目录默认跳过。`--force` 用于刷新带有批量工作流标识的已有计算，但输入 POSCAR 已改变或没有批量所有权标识的目录仍会被跳过。批量运行会继续处理其他结构，最后输出已准备、已完成、跳过和失败数量；只要有失败，命令就返回非零退出码。
+仅当 `.batch-workflow-state` 记录请求的操作已经完成时，已有目录才会被成功跳过。未完成或缺少状态记录的旧算例计为失败。`--force` 可刷新带有批量标识且没有提交记录的算例；POSCAR 已改变、缺少所有权标识或存在提交记录时会拒绝刷新。批量运行会继续处理其他结构，最后输出已准备、已完成、跳过和失败数量；只要有失败，命令就返回非零退出码。提交操作完成仅表示 Slurm 已接受作业，不代表计算结束。
 
-如果先采用 `--mode prepare`，审阅后可进入各计算目录执行 `crpa-workflow submit`。再次对相同目录执行默认批量命令会跳过已有计算；使用 `--force` 会涉及重新生成文件，不应仅为提交已有作业而盲目使用。
+如果先采用 `--mode prepare`，审阅后可进入各计算目录执行 `crpa-workflow submit`。再次执行默认批量提交命令时，已准备但尚未提交的算例会报告未完成；不应仅为提交已有作业而使用 `--force`。
 
 批量目录的启动脚本指向创建它的安装环境。应保留该环境，或激活其他明确版本后使用 `crpa-workflow --root /path/to/case status` 等命令管理已有计算。
 
@@ -693,7 +695,7 @@ crpa-workflow --config /path/to/workflow.conf batch \
 
 生成的作业应在阶段目录中提交：`cd STAGE && sbatch job.sh`。Slurm 暂存脚本通过 `SLURM_SUBMIT_DIR` 定位阶段，并检查工作流标记；直接用 Bash 执行时按脚本所在目录定位。升级软件后须重新生成已有 job.sh，旧脚本不会自动更新。
 
-运行命令的 `--help` 只显示帮助，不启动计算；未知参数报错。环境初始化与运行命令在子登录 Shell 中使用 `set -euo pipefail`；初始化、普通命令或管道失败会中止后续命令。自定义脚本若显式处理或忽略错误，仍需自行保证返回状态正确。
+运行命令的 `--help` 只显示帮助，不启动计算；未知参数报错。环境初始化与运行命令在非登录子 Shell 中使用 `set -euo pipefail`，建议通过 `EXECUTION_SETUP` 显式加载环境。旧配置中位于 `SBATCH_TEMPLATE` 的初始化也会检查失败，所有 Slurm 指令必须位于可执行代码之前。初始化、普通命令或管道失败会中止后续命令。自定义脚本若显式处理或忽略错误，仍需自行保证返回状态正确。
 
 后处理使用配置中的 `VASPKIT_BIN`，命令行 `--vaspkit` 优先。Wannier 强制替换失败时恢复旧阶段；若文件系统同时阻止恢复，旧数据保留在准备临时目录的 `previous-04_wann` 中，恢复前不要删除。成功强制替换仍会移除旧 Wannier 输出。
 

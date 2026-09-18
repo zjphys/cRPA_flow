@@ -1,4 +1,19 @@
-# Candidate validation record — 1.0.0
+# Candidate validation record — 1.1.0
+
+## Submission reliability checks — 2026-09-18
+
+- Full Python suite: 142 tests passed on Ubuntu 24.04 / Python 3.12, including
+  21 new Linux/Bash regression tests in `test_submission_safety.py`.
+- Four existing Shell integration suites passed with mocked VASPKIT/Slurm.
+- Built and installed the wheel in a separate Linux environment; installed CLI
+  integration passed outside the repository, including paths containing spaces.
+- Verified login-profile isolation, failed header setup, header directive order,
+  whole-pipeline preflight, partial retry, active-job guards, completed/failed job
+  handling, explicit resubmission, accounting outages, ambiguous scheduler results,
+  cluster propagation, per-case submission locking and incomplete batch recovery.
+- Slurm was simulated; no real scheduler submissions or VASP calculations were run.
+
+The records below describe earlier validation runs.
 
 Validated on 2026-09-11. This record concerns source organization, packaging and
 mocked execution. No actual VASP, Wannier or cRPA calculation was run during this work.
