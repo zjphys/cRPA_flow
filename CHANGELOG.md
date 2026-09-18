@@ -2,6 +2,8 @@
 
 ## 1.1.0 — submission reliability
 
+- Guard empty argument arrays under `set -u` for Bash 4.2/4.3 compatibility
+  in submission, scheduler queries and explicit Wannier `--kpr` overrides.
 - Use non-login shells for generated jobs and direct stage execution.
 - Check legacy job-header setup failures without placing executable code before
   Slurm directives; reject directives that follow executable header code.

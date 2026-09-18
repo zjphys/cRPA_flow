@@ -654,7 +654,7 @@ prepare_wannier_stage() {
   done
   run_python_tool prepare_wannier \
     --root "$ROOT_DIR" --vaspkit "$VASPKIT_BIN" \
-    "${kpr_arguments[@]}" "$@"
+    ${kpr_arguments[@]+"${kpr_arguments[@]}"} "$@"
   write_job 04_wann
   register_stage 04_wann
   info "Prepared 04_wann. Use run-wannier or submit-wannier."
@@ -791,11 +791,13 @@ submission_state() {
   local job_id="$1" cluster="$2" output state
   local -a cluster_args=()
   [[ "$cluster" == - ]] || cluster_args=(--clusters="$cluster")
+  # Bash 4.2/4.3 treat empty arrays as unset under nounset. The guarded
+  # expansion passes zero arguments when empty and preserves populated ones.
   # Accounting may lag; prefer the live queue, then an exact allocation record.
-  if output="$("$SQUEUE_COMMAND" "${cluster_args[@]}" --noheader --jobs="$job_id" --format=%T 2>/dev/null)" && [[ -n "$output" ]]; then
+  if output="$("$SQUEUE_COMMAND" ${cluster_args[@]+"${cluster_args[@]}"} --noheader --jobs="$job_id" --format=%T 2>/dev/null)" && [[ -n "$output" ]]; then
     state="$(printf '%s\n' "$output" | awk 'NF {print $1; exit}')"
   else
-    output="$("$SACCT_COMMAND" "${cluster_args[@]}" --noheader --allocations --parsable2 --jobs="$job_id" --format=JobIDRaw,State 2>/dev/null)" ||
+    output="$("$SACCT_COMMAND" ${cluster_args[@]+"${cluster_args[@]}"} --noheader --allocations --parsable2 --jobs="$job_id" --format=JobIDRaw,State 2>/dev/null)" ||
       die "Cannot query job $job_id. Check squeue/sacct before retrying; no new jobs were submitted."
     state="$(printf '%s\n' "$output" | awk -F '|' -v id="$job_id" '$1 == id {split($2, s, /[ +]/); print s[1]; exit}')"
   fi
@@ -902,7 +904,7 @@ submit_selected() (
     [[ "$cluster" == - ]] || options+=(--clusters="$cluster")
     # Leave evidence if interrupted after sbatch accepts a job but before recording it.
     printf '%s\n' "Submitting $stage; inspect Slurm before removing this file." > "$ledger/$stage.pending"
-    if output="$(submit_stage_job "$stage" "${options[@]}")"; then
+    if output="$(submit_stage_job "$stage" ${options[@]+"${options[@]}"})"; then
       printf '%s\n' "$output" >> "$ledger/$stage.pending"
     else
       submit_status=$?

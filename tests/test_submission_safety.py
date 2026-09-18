@@ -32,6 +32,9 @@ path = root / "scheduler.json"
 data = json.loads(path.read_text())
 name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
+if "" in args:
+    print("unexpected empty scheduler argument", file=sys.stderr)
+    sys.exit(2)
 if name == "sbatch":
     stage = pathlib.Path.cwd().name
     if (root / "reject").exists() and (root / "reject").read_text() == stage:
@@ -282,6 +285,23 @@ declare -A STAGE_COMMANDS=([default]='printf "%s" "${REVIEW_STACK:-unset}" > exe
             self.workflow(command, ok=True)
             self.workflow(command, "--resubmit", ok=False)
         self.assertEqual(len(self.data()["calls"]), 2)
+
+    def test_crpa_empty_options_and_queries_preserve_exact_arguments(self):
+        directory = self.case / "05_crpa"
+        directory.mkdir()
+        (directory / ".generated-by-poscar-workflow").touch()
+        (directory / "job.sh").write_text("#!/bin/bash\ntrue\n")
+        with (self.case / ".workflow-stages").open("a") as f:
+            f.write("05_crpa\n")
+        self.workflow("submit-crpa", "--job-name", "Ce Ru", ok=True)
+        self.assertEqual(self.data()["calls"][0]["args"],
+                         ["--parsable", "--job-name=Ce Ru-crpa", "job.sh"])
+        self.workflow("submit-crpa", ok=True)  # Empty cluster args in squeue.
+        self.finish()
+        self.workflow("submit-crpa", ok=True)  # Empty cluster args in sacct.
+        self.assertEqual(len(self.data()["calls"]), 1)
+        self.workflow("submit-crpa", "--resubmit", ok=True)
+        self.assertEqual(self.data()["calls"][1]["args"], ["--parsable", "job.sh"])
 
     def test_batch_preparation_failure_cannot_be_reported_as_success_on_retry(self):
         marker = self.root / "preparation-fails"

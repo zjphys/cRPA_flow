@@ -1,5 +1,18 @@
 # Candidate validation record — 1.1.0
 
+## Empty-array compatibility fix — 2026-09-18
+
+- Reproduced `options[@]: unbound variable` with the unpatched backend using
+  an isolated Bash 4.3.30 runtime; the new cRPA regression test fails before the fix.
+- After the fix, all 22 submission tests pass on Bash 4.3.30 and Bash 5.2.21.
+  They cover empty submit/query options, exact argument boundaries, active-job
+  reuse, accounting queries and explicit resubmission.
+- All four Shell integration suites pass on Bash 4.3.30, including explicit
+  Wannier `--kpr` overrides. Scheduler calls are mocked; no real jobs were submitted.
+- To exercise an older Bash, put its `bin` directory first in `PATH` when running
+  `python -B -m unittest discover -s tests -p test_submission_safety.py` and
+  `bash tests/run_shell_tests.sh`. This selects it for child Bash invocations too.
+
 ## Submission reliability checks — 2026-09-18
 
 - Full Python suite: 142 tests passed on Ubuntu 24.04 / Python 3.12, including
